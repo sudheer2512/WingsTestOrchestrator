@@ -1,0 +1,109 @@
+<div class="layout">
+  <aside class="list">
+    <div class="row"><h2>{{ templates() ? 'Plan templates' : 'Test plans' }}</h2><span class="spacer"></span>
+      @if (canEdit()) { <button mat-icon-button routerLink="/plans/new"><mat-icon>add</mat-icon></button> }</div>
+    <button mat-button (click)="toggleTemplates()">{{ templates() ? 'Show plans' : 'Show templates' }}</button>
+    @for (p of plans(); track p.id) {
+      <a class="item" [class.on]="detail()?.summary?.id === p.id" [routerLink]="['/plans', p.id]">
+        <span class="num">{{ p.numberDisplay }}</span><span>{{ p.name }}</span><app-status [value]="p.status === 'Approved' ? 'Approved' : p.status === 'Active' ? 'InReview' : p.status" [label]="p.status" />
+        <span class="sub">{{ p.testCaseCount }} test cases · {{ p.runCount }} run(s){{ p.targetReleaseLabel ? ' · release ' + p.targetReleaseLabel : '' }}{{ p.environmentName ? ' · ' + p.environmentName : '' }}</span>
+      </a>
+    } @empty { <p class="muted">None yet.</p> }
+  </aside>
+
+  <section class="page">
+    @if (draft(); as d) {
+      <div class="page-head">
+        @if (detail(); as det) { <span class="num">{{ det.summary.numberDisplay }}</span> }
+        <h1>{{ d.name || 'New plan' }}</h1>
+        @if (detail(); as det) { <app-status [value]="det.summary.status === 'Active' ? 'InReview' : det.summary.status" [label]="det.summary.status" />
+          <span class="pill" [attr.data-tone]="det.summary.risk === 'Critical' || det.summary.risk === 'High' ? 'bad' : 'neutral'">{{ det.summary.risk }} risk</span> }
+        <span class="spacer"></span>
+        @if (detail(); as det) {
+          @if (!det.summary.isTemplate) {
+            @if (det.summary.status === 'Active') { <button mat-stroked-button (click)="status('Completed')">Mark completed</button> }
+            @if (det.summary.status === 'Completed') {
+              <button mat-stroked-button (click)="status('Active')">Reopen</button>
+              @if (auth.can('plans.approve')) { <button mat-flat-button (click)="status('Approved')"><mat-icon>verified</mat-icon>Approve completion</button> }
+            }
+          }
+          @if (canEdit()) {
+            <button mat-icon-button [matMenuTriggerFor]="more"><mat-icon>more_vert</mat-icon></button>
+            <mat-menu #more>
+              <button mat-menu-item (click)="clone(false)">Clone plan</button>
+              <button mat-menu-item (click)="clone(true)">Save as template</button>
+              <button mat-menu-item (click)="remove()">Delete</button>
+            </mat-menu>
+          }
+        }
+        @if (canEdit() && detail()?.summary?.status !== 'Approved') { <button mat-flat-button (click)="save()"><mat-icon>save</mat-icon>Save</button> }
+      </div>
+
+      @if (detail(); as det) {
+        @if (det.approvedBy) { <div class="panel approved">Completion approved by <b>{{ det.approvedBy }}</b> on {{ det.approvedAt | date: 'medium' }}{{ det.approvalComment ? ' — ' + det.approvalComment : '' }}</div> }
+        @if (!det.summary.isTemplate && auth.can('tests.execute')) {
+          <div class="panel row wrap-row">
+            <b>Execute plan</b>
+            <mat-form-field><mat-label>Environment</mat-label><mat-select [(ngModel)]="runEnv"><mat-option [value]="undefined">None</mat-option>
+              @for (e of envs(); track e.id) { <mat-option [value]="e.id">{{ e.name }}{{ e.isProduction ? ' (PROD)' : '' }}</mat-option> }</mat-select></mat-form-field>
+            <mat-form-field><mat-label>Build version</mat-label><input matInput [(ngModel)]="runBuild" /></mat-form-field>
+            <button mat-flat-button (click)="execute()" [disabled]="!det.suites.length"><mat-icon>play_arrow</mat-icon>Execute</button>
+            <span class="muted small">Automated tests are dispatched to agents; manual test cases wait in the run for testers to record results.</span>
+          </div>
+        }
+      }
+
+      <div class="panel grid-3">
+        <mat-form-field class="span3"><mat-label>Name</mat-label><input matInput [(ngModel)]="d.name" /></mat-form-field>
+        <mat-form-field class="span3"><mat-label>Testing objective</mat-label><textarea matInput rows="2" [(ngModel)]="d.objective"></textarea></mat-form-field>
+        <mat-form-field class="span3"><mat-label>Scope</mat-label><textarea matInput rows="2" [(ngModel)]="d.scope"></textarea></mat-form-field>
+        <mat-form-field><mat-label>Product</mat-label><mat-select [(ngModel)]="d.productId" (ngModelChange)="loadReleases($event); d.targetReleaseId = undefined">
+          <mat-option [value]="undefined">—</mat-option>@for (p of products(); track p.id) { <mat-option [value]="p.id">{{ p.name }}</mat-option> }</mat-select></mat-form-field>
+        <mat-form-field><mat-label>Target release</mat-label><mat-select [(ngModel)]="d.targetReleaseId">
+          <mat-option [value]="undefined">—</mat-option>@for (r of releases(); track r.id) { <mat-option [value]="r.id">{{ r.versionLabel }}</mat-option> }</mat-select></mat-form-field>
+        <mat-form-field><mat-label>Build version</mat-label><input matInput [(ngModel)]="d.buildVersion" /></mat-form-field>
+        <mat-form-field><mat-label>Default environment</mat-label><mat-select [(ngModel)]="d.environmentId">
+          <mat-option [value]="undefined">—</mat-option>@for (e of envs(); track e.id) { <mat-option [value]="e.id">{{ e.name }}</mat-option> }</mat-select></mat-form-field>
+        <mat-form-field><mat-label>Start date</mat-label><input matInput type="date" [(ngModel)]="d.startDate" /></mat-form-field>
+        <mat-form-field><mat-label>End date</mat-label><input matInput type="date" [(ngModel)]="d.endDate" /></mat-form-field>
+        <mat-form-field><mat-label>Owners</mat-label><input matInput [(ngModel)]="d.owners" /></mat-form-field>
+        <mat-form-field><mat-label>Assigned testers</mat-label><input matInput [(ngModel)]="d.testers" /></mat-form-field>
+        <mat-form-field><mat-label>Risk</mat-label><mat-select [(ngModel)]="d.risk">@for (r of risks; track r) { <mat-option [value]="r">{{ r }}</mat-option> }</mat-select></mat-form-field>
+        <mat-form-field class="span3"><mat-label>Entry criteria</mat-label><textarea matInput rows="2" [(ngModel)]="d.entryCriteria"></textarea></mat-form-field>
+        <mat-form-field class="span3"><mat-label>Exit criteria</mat-label><textarea matInput rows="2" [(ngModel)]="d.exitCriteria"></textarea></mat-form-field>
+        <mat-form-field class="span3"><mat-label>Defect acceptance rules</mat-label><textarea matInput rows="2" [(ngModel)]="d.defectAcceptanceRules"></textarea></mat-form-field>
+        <mat-form-field class="span3"><mat-label>Required suites</mat-label>
+          <mat-select multiple [(ngModel)]="d.suiteIds">@for (s of suites(); track s.id) { <mat-option [value]="s.id">{{ s.numberDisplay }} {{ s.name }} ({{ s.itemCount }})</mat-option> }</mat-select></mat-form-field>
+      </div>
+
+      @if (detail(); as det) {
+        <div class="panel">
+          <h3>Coverage</h3>
+          <div class="totals">@for (t of totals(); track t[0]) { <span><b>{{ t[1] }}</b> {{ t[0] | humanize }}</span> }</div>
+          <table class="data">
+            <thead><tr><th>Test case</th><th>Latest outcome</th><th>Run</th><th>When</th><th>By</th></tr></thead>
+            <tbody>
+              @for (c of det.coverage; track c.testCaseId) {
+                <tr><td><a [routerLink]="['/test-cases', c.testCaseId]">{{ c.numberDisplay }}</a> {{ c.name }}</td>
+                  <td>@if (c.outcome) { <app-status [value]="c.outcome" [label]="c.outcome | humanize" /> } @else { <span class="muted">Not executed</span> }</td>
+                  <td>@if (c.runId) { <a [routerLink]="['/runs', c.runId]">{{ c.runNumber }}</a> }</td><td class="muted">{{ c.at | date: 'short' }}</td><td>{{ c.executedBy }}</td></tr>
+              } @empty { <tr><td colspan="5" class="empty">Add suites to define the plan's scope.</td></tr> }
+            </tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <h3>Runs</h3>
+          <table class="data">
+            <thead><tr><th>Run</th><th>Environment</th><th>Status</th><th>Progress</th><th>Started</th></tr></thead>
+            <tbody>
+              @for (r of det.runs; track r.id) {
+                <tr class="clickable" [routerLink]="['/runs', r.id]"><td class="num">{{ r.numberDisplay }}</td><td>{{ r.environmentName }}</td><td><app-status [value]="r.status" /></td>
+                  <td><app-run-bar [run]="r" /></td><td class="muted">{{ r.createdAt | date: 'short' }}</td></tr>
+              } @empty { <tr><td colspan="5" class="empty">Not executed yet.</td></tr> }
+            </tbody>
+          </table>
+        </div>
+      }
+    } @else { <div class="empty">Select a plan or create one.</div> }
+  </section>
+</div>

@@ -1,0 +1,85 @@
+@use '@angular/material' as mat;
+@import 'material-icons/iconfont/filled.css';
+
+// Dense enterprise theme: compact density, neutral surfaces, one accent.
+html {
+  color-scheme: light;
+  @include mat.theme((
+    color: (primary: mat.$azure-palette, tertiary: mat.$blue-palette, theme-type: light),
+    typography: (plain-family: 'Segoe UI, system-ui, -apple-system, Roboto, sans-serif', brand-family: 'Segoe UI, system-ui, sans-serif'),
+    density: -3,
+  ));
+}
+
+:root {
+  --canvas: #f3f4f6;
+  --surface: #ffffff;
+  --surface-2: #f8f9fb;
+  --border: #e1e4e8;
+  --hover: #f1f5fb;
+  --selected: #e3edfb;
+  --text: #1f2328;
+  --muted: #656d76;
+  --accent: #0b63ce;
+  --good: #1a7f37;
+  --good-bg: #dafbe1;
+  --warn: #9a6700;
+  --warn-bg: #fff4d4;
+  --bad: #cf222e;
+  --bad-bg: #ffebe9;
+  --off: #6e7781;
+  --off-bg: #eaeef2;
+  --chrome: #16213a;
+  --chrome-fg: #ffffff;
+  --chrome-muted: #b6c2d9;
+  --mono: 'Cascadia Mono', 'SFMono-Regular', Consolas, Menlo, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--canvas); color: var(--text); font: 13px/1.45 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif; }
+a { color: var(--accent); }
+h1, h2, h3 { margin: 0; font-weight: 600; }
+h1 { font-size: 18px; } h2 { font-size: 15px; } h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+
+.full { width: 100%; }
+.muted { color: var(--muted); }
+.mono { font-family: var(--mono); }
+.pre { white-space: pre-wrap; }
+.error { color: var(--bad); }
+.row { display: flex; align-items: center; gap: 8px; }
+.wrap-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.spacer { flex: 1; }
+.danger { --mat-button-filled-container-color: var(--bad); }
+
+// Page scaffolding used by list/detail screens
+.page { height: 100%; overflow: auto; padding: 16px; }
+.page-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
+.panel + .panel { margin-top: 12px; }
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 0 12px; }
+.grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 12px; }
+
+// Dense data tables (native table for speed with large result sets)
+table.data { width: 100%; border-collapse: collapse; background: var(--surface); }
+table.data th { position: sticky; top: 0; background: var(--surface-2); text-align: left; font-weight: 600; color: var(--muted); font-size: 12px; z-index: 1; }
+table.data th, table.data td { padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+table.data tr.clickable { cursor: pointer; }
+table.data tr.clickable:hover td { background: var(--hover); }
+table.data tr.selected td { background: var(--selected); }
+table.data td.num { font-family: var(--mono); color: var(--muted); white-space: nowrap; }
+
+.pill { display: inline-block; padding: 0 8px; border-radius: 10px; font-size: 11px; line-height: 18px; font-weight: 600; white-space: nowrap; background: var(--off-bg); color: var(--off); }
+.pill[data-tone='good'] { background: var(--good-bg); color: var(--good); }
+.pill[data-tone='warn'] { background: var(--warn-bg); color: var(--warn); }
+.pill[data-tone='bad'] { background: var(--bad-bg); color: var(--bad); }
+.pill[data-tone='neutral'] { background: #ddf4ff; color: #0969da; }
+
+.tag { display: inline-block; padding: 0 6px; margin: 1px 2px 1px 0; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--border); font-size: 11px; }
+.empty { padding: 24px; text-align: center; color: var(--muted); }
+.kv { display: grid; grid-template-columns: 160px 1fr; gap: 4px 12px; }
+.kv dt { color: var(--muted); } .kv dd { margin: 0; word-break: break-word; }
+
+.snack-error { --mat-snack-bar-container-color: #8c1d18; }
+.mat-mdc-form-field { margin-bottom: 4px; }
+.mat-mdc-tab-body-content { overflow: visible !important; }

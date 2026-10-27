@@ -1,0 +1,316 @@
+@if (loading() && !detail()) { <mat-progress-bar mode="indeterminate" /> }
+@if (detail(); as f) {
+  <header class="head">
+    <div class="crumbs">
+      <span>{{ f.productName }}</span>
+      @for (a of f.ancestors; track a.id) { <span class="sep">›</span><a (click)="navigate.emit(a.id)">{{ a.name }}</a> }
+    </div>
+    <div class="title-row">
+      <span class="seq" matTooltip="Creation sequence — permanent, never reused">[{{ f.sequenceDisplay }}]</span>
+      @if (editing()) {
+        <mat-form-field class="name-field"><mat-label>Name</mat-label><input matInput [(ngModel)]="d.name" required /></mat-form-field>
+      } @else {
+        <h1 [class.deprecated]="f.fields.isDeprecated">{{ f.fields.name }}</h1>
+      }
+      <app-status [value]="f.fields.statusCode" [label]="ui.label('featureStatuses', f.fields.statusCode)" />
+      <span class="pill">{{ ui.label('featureTypes', f.fields.featureTypeCode) }}</span>
+      @if (f.fields.applicationType !== 'None') { <span class="pill" data-tone="neutral">{{ f.fields.applicationType }}</span> }
+      <span class="spacer"></span>
+      @if (canEdit()) {
+        @if (editing()) {
+          <button mat-button (click)="cancelEdit()">Cancel</button>
+          <button mat-flat-button (click)="save()" [disabled]="saving()"><mat-icon>save</mat-icon>Save</button>
+        } @else {
+          <button mat-stroked-button (click)="startEdit()"><mat-icon>edit</mat-icon>Edit</button>
+        }
+      }
+    </div>
+  </header>
+  @if (loading()) { <mat-progress-bar mode="indeterminate" class="thin" /> }
+
+  <mat-tab-group class="tabs" [selectedIndex]="selectedTab()" (selectedIndexChange)="loadTab($event)" animationDuration="0" mat-stretch-tabs="false">
+    <!-- ================= Overview ================= -->
+    <mat-tab label="Overview">
+      <div class="tab-body">
+        <section class="panel">
+          <h3>Identification</h3>
+          @if (editing()) {
+            <div class="grid-3">
+              <mat-form-field><mat-label>Type</mat-label><mat-select [(ngModel)]="d.featureTypeCode">@for (t of ui.lookups()?.featureTypes; track t.code) { <mat-option [value]="t.code">{{ t.name }}</mat-option> }</mat-select></mat-form-field>
+              <mat-form-field><mat-label>Development status</mat-label><mat-select [(ngModel)]="d.statusCode">@for (t of ui.lookups()?.featureStatuses; track t.code) { <mat-option [value]="t.code">{{ t.name }}</mat-option> }</mat-select></mat-form-field>
+              <mat-form-field><mat-label>Application type</mat-label><mat-select [(ngModel)]="d.applicationType">@for (t of ui.lookups()?.applicationTypes; track t) { <mat-option [value]="t">{{ t }}</mat-option> }</mat-select></mat-form-field>
+              <mat-form-field><mat-label>Current version</mat-label><input matInput [(ngModel)]="d.currentVersion" /></mat-form-field>
+              <mat-form-field><mat-label>Release introduced</mat-label>
+                <mat-select [(ngModel)]="d.introducedInVersionId"><mat-option [value]="undefined">—</mat-option>@for (r of releases(); track r.id) { <mat-option [value]="r.id">{{ r.versionLabel }}</mat-option> }</mat-select>
+              </mat-form-field>
+            </div>
+            <mat-form-field class="full"><mat-label>Description</mat-label><textarea matInput rows="3" [(ngModel)]="d.description"></textarea></mat-form-field>
+            <mat-form-field class="full"><mat-label>Business objective</mat-label><textarea matInput rows="2" [(ngModel)]="d.businessObjective"></textarea></mat-form-field>
+            <mat-form-field class="full"><mat-label>Functional requirements</mat-label><textarea matInput rows="3" [(ngModel)]="d.functionalRequirements"></textarea></mat-form-field>
+            <div class="row">
+              <mat-checkbox [(ngModel)]="d.isDeprecated">Deprecated</mat-checkbox>
+              @if (d.isDeprecated) {
+                <button mat-button (click)="pickReplacement()"><mat-icon>swap_horiz</mat-icon>{{ d.replacedByFeatureId ? 'Change replacement' : 'Set replacement feature' }}</button>
+                @if (d.replacedByFeatureId) { <button mat-button (click)="d.replacedByFeatureId = undefined">Clear</button> }
+              }
+            </div>
+            @if (d.isDeprecated) { <mat-form-field class="full"><mat-label>Deprecation note</mat-label><input matInput [(ngModel)]="d.deprecationNote" /></mat-form-field> }
+          } @else {
+            <dl class="kv">
+              <dt>Feature GUID</dt><dd class="mono">{{ f.id }}</dd>
+              <dt>Sequence</dt><dd><span class="mono">{{ f.sequenceDisplay }}</span> <span class="muted">&nbsp;in scope {{ f.sequenceScopeKey }}{{ f.isLegacySequence ? ' · imported legacy number' : '' }}</span></dd>
+              <dt>Product / parent</dt><dd>{{ f.productName }}{{ f.parentName ? ' › ' + f.parentName : '' }}</dd>
+              <dt>Created</dt><dd>{{ f.createdAt | date: 'medium' }} by {{ f.createdBy }}</dd>
+              <dt>Last modified</dt><dd>{{ f.modifiedAt ? (f.modifiedAt | date: 'medium') + ' by ' + f.modifiedBy : '—' }}</dd>
+              <dt>Release introduced</dt><dd>{{ f.introducedInVersionLabel || '—' }}</dd>
+              <dt>Current version</dt><dd>{{ f.fields.currentVersion || '—' }}</dd>
+              @if (f.fields.isDeprecated) { <dt>Deprecated</dt><dd>{{ f.replacedByName ? 'Replaced by ' + f.replacedByName + '. ' : '' }}{{ f.fields.deprecationNote }}</dd> }
+              <dt>Description</dt><dd class="pre">{{ f.fields.description || '—' }}</dd>
+              <dt>Business objective</dt><dd class="pre">{{ f.fields.businessObjective || '—' }}</dd>
+              <dt>Functional requirements</dt><dd class="pre">{{ f.fields.functionalRequirements || '—' }}</dd>
+            </dl>
+          }
+        </section>
+
+        <section class="panel">
+          <h3>Technical information</h3>
+          @if (editing()) {
+            <div class="grid-2">
+              @for (fd of technical; track fd.key) {
+                <mat-form-field class="full"><mat-label>{{ fd.label }}</mat-label>
+                  @if (fd.multiline) { <textarea matInput rows="2" [(ngModel)]="d[fd.key]"></textarea> } @else { <input matInput [(ngModel)]="d[fd.key]" /> }
+                </mat-form-field>
+              }
+            </div>
+          } @else {
+            <dl class="kv">@for (fd of technical; track fd.key) { <dt>{{ fd.label }}</dt><dd class="pre" [class.mono]="!fd.multiline">{{ value(fd.key) || '—' }}</dd> }</dl>
+          }
+        </section>
+
+        <section class="panel">
+          <h3>Business behaviour</h3>
+          @if (editing()) {
+            <div class="grid-2">
+              @for (fd of behaviour; track fd.key) {
+                <mat-form-field class="full"><mat-label>{{ fd.label }}</mat-label><textarea matInput rows="3" [(ngModel)]="d[fd.key]"></textarea></mat-form-field>
+              }
+            </div>
+          } @else {
+            <dl class="kv">@for (fd of behaviour; track fd.key) { <dt>{{ fd.label }}</dt><dd class="pre">{{ value(fd.key) || '—' }}</dd> }</dl>
+          }
+        </section>
+      </div>
+    </mat-tab>
+
+    <!-- ================= Requirements ================= -->
+    <mat-tab [label]="'Requirements (' + f.requirements.length + ')'">
+      <div class="tab-body">
+        <table class="data">
+          <thead><tr><th>Code</th><th>Title</th><th>Priority</th><th>Description</th><th>Link</th><th></th></tr></thead>
+          <tbody>
+            @for (r of f.requirements; track r.id) {
+              @if (editingReq() === r.id) {
+                <tr>
+                  <td><input class="cell" [(ngModel)]="reqDraft.code" /></td><td><input class="cell" [(ngModel)]="reqDraft.title" /></td>
+                  <td><select class="cell" [(ngModel)]="reqDraft.priority"><option>HIGH</option><option>MEDIUM</option><option>LOW</option></select></td>
+                  <td><input class="cell" [(ngModel)]="reqDraft.description" /></td><td><input class="cell" [(ngModel)]="reqDraft.externalLink" /></td>
+                  <td class="actions"><button mat-icon-button (click)="saveRequirement()"><mat-icon>check</mat-icon></button><button mat-icon-button (click)="editingReq.set(null)"><mat-icon>close</mat-icon></button></td>
+                </tr>
+              } @else {
+                <tr>
+                  <td class="num">{{ r.code }}</td><td>{{ r.title }}</td><td><app-status [value]="r.priority" /></td><td class="pre">{{ r.description }}</td>
+                  <td>@if (r.externalLink) { <a [href]="r.externalLink" target="_blank" rel="noopener noreferrer">open</a> }</td>
+                  <td class="actions">@if (canEdit()) { <button mat-icon-button (click)="editRequirement(r)"><mat-icon>edit</mat-icon></button><button mat-icon-button (click)="deleteRequirement(r)"><mat-icon>delete</mat-icon></button> }</td>
+                </tr>
+              }
+            } @empty { <tr><td colspan="6" class="empty">No requirements recorded.</td></tr> }
+          </tbody>
+        </table>
+        @if (canEdit()) {
+          <div class="add-row">
+            <input class="cell" placeholder="Code (e.g. REQ-SAL-001)" [(ngModel)]="newReq.code" />
+            <input class="cell grow" placeholder="Title" [(ngModel)]="newReq.title" />
+            <select class="cell" [(ngModel)]="newReq.priority"><option>HIGH</option><option>MEDIUM</option><option>LOW</option></select>
+            <input class="cell grow" placeholder="External link (optional)" [(ngModel)]="newReq.externalLink" />
+            <button mat-flat-button [disabled]="!newReq.code || !newReq.title" (click)="addRequirement()">Add</button>
+          </div>
+        }
+      </div>
+    </mat-tab>
+
+    <!-- ================= Test cases ================= -->
+    <mat-tab [label]="'Test cases (' + f.testing.testCaseCount + ')'">
+      <div class="tab-body">
+        <div class="row bar">
+          @if (auth.can('testcases.edit')) {
+            <button mat-flat-button (click)="newTestCase()"><mat-icon>add</mat-icon>New test case</button>
+            <button mat-stroked-button (click)="linkTestCases()"><mat-icon>link</mat-icon>Link existing</button>
+          }
+          @if (auth.can('ai.use')) { <a mat-stroked-button [routerLink]="['/ai']" [queryParams]="{ tab: 'tests', feature: f.id }"><mat-icon>auto_awesome</mat-icon>Suggest with AI</a> }
+          <span class="spacer"></span>
+          <mat-checkbox [checked]="includeSubfeatures()" (change)="includeSubfeatures.set($event.checked); loadTestCases()">Include sub-features</mat-checkbox>
+        </div>
+        <table class="data">
+          <thead><tr><th>Number</th><th>Name</th><th>Type</th><th>Priority</th><th>Automation</th><th>Review</th><th>Rev.</th></tr></thead>
+          <tbody>
+            @for (t of testCases(); track t.id) {
+              <tr class="clickable" [routerLink]="['/test-cases', t.id]">
+                <td class="num">{{ t.numberDisplay }}</td><td>{{ t.name }} @for (tag of t.tags; track tag) { <span class="tag">{{ tag }}</span> }</td>
+                <td>{{ ui.label('testTypes', t.testTypeCode) }}</td><td>{{ t.priority }}</td>
+                <td><app-status [value]="t.automationStatus" [label]="t.automationStatus | humanize" /></td>
+                <td><app-status [value]="t.reviewStatus" [label]="t.reviewStatus | humanize" /></td><td class="num">r{{ t.revision }}</td>
+              </tr>
+            } @empty { <tr><td colspan="7" class="empty">No test cases cover this feature yet.</td></tr> }
+          </tbody>
+        </table>
+      </div>
+    </mat-tab>
+
+    <!-- ================= Test code ================= -->
+    <mat-tab label="Test code">
+      <div class="tab-body">
+        <div class="row bar">
+          @if (auth.can('testcode.upload')) {
+            <button mat-flat-button [routerLink]="['/test-code/upload']" [queryParams]="{ productId: f.productId, featureId: f.id }"><mat-icon>upload</mat-icon>Upload test code</button>
+          }
+          <span class="muted">Automated tests mapped to this feature, from the latest version of each package.</span>
+        </div>
+        <table class="data">
+          <thead><tr><th>Package</th><th>Version</th><th>Test</th><th>File</th><th>Framework</th><th>Test case</th></tr></thead>
+          <tbody>
+            @for (a of automation(); track a.test.id) {
+              <tr class="clickable" [routerLink]="['/test-code/versions', a.versionId]">
+                <td>{{ a.packageName }}</td><td>v{{ a.versionNumber }} <app-status [value]="a.status" [label]="a.status | humanize" /></td>
+                <td>{{ a.test.displayName }}<div class="muted mono small">{{ a.test.identifier }}</div></td>
+                <td class="mono small">{{ a.test.filePath }}:{{ a.test.line }}</td><td>{{ a.test.framework }}</td>
+                <td>{{ a.test.testCaseNumber ? a.test.testCaseNumber + ' ' + a.test.testCaseName : '—' }}</td>
+              </tr>
+            } @empty { <tr><td colspan="6" class="empty">No automated tests are mapped to this feature.</td></tr> }
+          </tbody>
+        </table>
+      </div>
+    </mat-tab>
+
+    <!-- ================= Dependencies ================= -->
+    <mat-tab [label]="'Dependencies (' + (f.dependencies.length + f.dependents.length) + ')'">
+      <div class="tab-body">
+        <p class="muted">Dependencies drive execution order and prerequisite resolution. They are independent of the creation sequence.</p>
+        <div class="grid-2">
+          <section class="panel">
+            <div class="row"><h3>Depends on</h3><span class="spacer"></span>
+              @if (canEdit()) {
+                <select class="cell" [(ngModel)]="newDepType">@for (t of ui.lookups()?.dependencyTypes; track t) { <option [value]="t">{{ t | humanize }}</option> }</select>
+                <button mat-stroked-button (click)="addDependency()"><mat-icon>add</mat-icon>Add</button>
+              }
+            </div>
+            @for (dep of f.dependencies; track dep.id) {
+              <div class="dep"><span class="mono muted">{{ dep.featureSequence }}</span><a (click)="navigate.emit(dep.featureId)">{{ dep.featureName }}</a>
+                <span class="pill">{{ dep.type | humanize }}</span><span class="muted">{{ dep.notes }}</span><span class="spacer"></span>
+                @if (canEdit()) { <button mat-icon-button (click)="removeDependency(dep.id)"><mat-icon>close</mat-icon></button> }
+              </div>
+            } @empty { <p class="muted">None.</p> }
+          </section>
+          <section class="panel">
+            <h3>Required by</h3>
+            @for (dep of f.dependents; track dep.id) {
+              <div class="dep"><span class="mono muted">{{ dep.featureSequence }}</span><a (click)="navigate.emit(dep.featureId)">{{ dep.featureName }}</a><span class="pill">{{ dep.type | humanize }}</span></div>
+            } @empty { <p class="muted">No other feature depends on this one.</p> }
+          </section>
+        </div>
+      </div>
+    </mat-tab>
+
+    <!-- ================= Source code ================= -->
+    <mat-tab [label]="'Source code (' + f.sourceMappings.length + ')'">
+      <div class="tab-body">
+        <p class="muted">Files, classes, APIs and database objects that implement this feature. Declared mappings need developer approval before change-impact analysis relies on them.</p>
+        <table class="data">
+          <thead><tr><th>Kind</th><th>Value</th><th>Repository</th><th>Notes</th><th>Status</th><th></th></tr></thead>
+          <tbody>
+            @for (m of f.sourceMappings; track m.id) {
+              <tr><td>{{ m.kind | humanize }}</td><td class="mono">{{ m.value }}</td><td>{{ m.repository }}</td><td>{{ m.notes }}</td>
+                <td>@if (m.isApproved) { <app-status value="Approved" /> } @else { <app-status value="Pending" label="Awaiting approval" /> }</td>
+                <td class="actions">@if (canEdit()) {
+                  @if (!m.isApproved) { <button mat-icon-button matTooltip="Approve" (click)="approveMapping(m.id)"><mat-icon>verified</mat-icon></button> }
+                  <button mat-icon-button (click)="deleteMapping(m.id)"><mat-icon>delete</mat-icon></button> }</td></tr>
+            } @empty { <tr><td colspan="6" class="empty">No source mappings.</td></tr> }
+          </tbody>
+        </table>
+        @if (canEdit()) {
+          <div class="add-row">
+            <select class="cell" [(ngModel)]="newMapping.kind">@for (k of ui.lookups()?.sourceMappingKinds; track k) { <option [value]="k">{{ k | humanize }}</option> }</select>
+            <input class="cell grow" placeholder="Path, class, endpoint or object name" [(ngModel)]="newMapping.value" />
+            <input class="cell" placeholder="Repository" [(ngModel)]="newMapping.repository" />
+            <input class="cell" placeholder="Notes" [(ngModel)]="newMapping.notes" />
+            <button mat-flat-button [disabled]="!newMapping.value" (click)="addMapping()">Add</button>
+          </div>
+        }
+      </div>
+    </mat-tab>
+
+    <!-- ================= Attachments ================= -->
+    <mat-tab [label]="'Attachments (' + f.attachments.length + ')'">
+      <div class="tab-body">
+        @if (canEdit()) {
+          <div class="row bar">
+            <button mat-flat-button (click)="fileInput.click()"><mat-icon>attach_file</mat-icon>Upload files</button>
+            <input #fileInput type="file" multiple hidden (change)="upload(fileInput)" />
+            <input class="cell grow" placeholder="https://… specification or design link" [(ngModel)]="linkUrl" />
+            <input class="cell" placeholder="Caption" [(ngModel)]="linkCaption" />
+            <button mat-stroked-button [disabled]="!linkUrl" (click)="addLink()"><mat-icon>link</mat-icon>Add link</button>
+          </div>
+        }
+        <table class="data">
+          <thead><tr><th>Name</th><th>Size</th><th>Added</th><th></th></tr></thead>
+          <tbody>
+            @for (a of f.attachments; track a.id) {
+              <tr>
+                <td>@if (a.externalUrl) { <mat-icon class="inline">link</mat-icon><a [href]="a.externalUrl" target="_blank" rel="noopener noreferrer">{{ a.caption || a.externalUrl }}</a> }
+                    @else { <mat-icon class="inline">description</mat-icon><a (click)="download(a.id, a.fileName)">{{ a.fileName }}</a> }</td>
+                <td>{{ a.externalUrl ? '' : (a.sizeBytes | bytes) }}</td><td>{{ a.createdAt | date: 'medium' }} · {{ a.createdBy }}</td>
+                <td class="actions">@if (canEdit()) { <button mat-icon-button (click)="deleteAttachment(a.id, a.fileName)"><mat-icon>delete</mat-icon></button> }</td>
+              </tr>
+            } @empty { <tr><td colspan="4" class="empty">No attachments. Add screenshots, design documents, videos or specification links.</td></tr> }
+          </tbody>
+        </table>
+      </div>
+    </mat-tab>
+
+    <!-- ================= Audit history ================= -->
+    <mat-tab label="Audit history">
+      <div class="tab-body">
+        <p class="muted">{{ auditTotal() }} change(s), newest first. Includes requirements, mappings, dependencies and attachments.</p>
+        @for (a of audit(); track a.id) {
+          <div class="audit">
+            <div class="row"><strong>{{ a.action }}</strong><span class="pill">{{ a.entityType }}</span><span class="muted">{{ a.userName }} · {{ a.timestamp | date: 'medium' }}</span></div>
+            @if (a.summary) { <div class="muted">{{ a.summary }}</div> }
+            @for (c of a.changesJson | auditChanges; track c.field) {
+              <div class="change"><span class="field">{{ c.field }}</span>
+                @if (c.old !== undefined) { <span class="old">{{ c.old }}</span> → } <span class="new">{{ c.new }}</span></div>
+            }
+          </div>
+        } @empty { <p class="muted">No history.</p> }
+      </div>
+    </mat-tab>
+    <!-- ================= Execution history ================= -->
+    <mat-tab label="Execution history">
+      <div class="tab-body">
+        <p class="muted">Latest results of this feature's automated tests across runs (newest first).</p>
+        <table class="data">
+          <thead><tr><th>Outcome</th><th>Test</th><th>Run</th><th>Package</th><th>Agent</th><th>Duration</th><th>Finished</th></tr></thead>
+          <tbody>
+            @for (h of history(); track h.testExecutionId) {
+              <tr class="clickable" [routerLink]="['/runs', h.runId]">
+                <td><app-status [value]="h.outcome === 'InfrastructureError' ? 'Warning' : h.outcome" [label]="h.outcome | humanize" /></td>
+                <td>{{ h.displayName }}@if (h.errorMessage) { <div class="err small">{{ h.errorMessage }}</div> }</td>
+                <td class="mono">{{ h.runNumber }}</td><td>{{ h.packageName }} @if (h.packageVersionNumber) { v{{ h.packageVersionNumber }} }</td>
+                <td>{{ h.agentName }}</td><td class="num">{{ h.durationMs != null ? (h.durationMs / 1000).toFixed(1) + ' s' : '' }}</td>
+                <td class="muted">{{ h.completedAt | date: 'short' }}</td>
+              </tr>
+            } @empty { <tr><td colspan="7" class="empty">This feature's tests have not been executed yet.</td></tr> }
+          </tbody>
+        </table>
+      </div>
+    </mat-tab>
+  </mat-tab-group>
+}

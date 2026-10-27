@@ -1,0 +1,29 @@
+.num { font-family: var(--mono); color: var(--muted); }
+.summary { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr); gap: 16px; margin-bottom: 12px; }
+.progress app-run-bar { display: block; margin: 6px 0 10px; }
+:host ::ng-deep .progress .bar { height: 14px; border-radius: 7px; }
+.stats { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+.stats b { font-size: 16px; } .ok { color: var(--good); } .bad { color: var(--bad); } .infra { color: #bc4c00; }
+.kv { grid-template-columns: 90px 1fr; }
+.small { font-size: 12px; }
+.split { display: grid; grid-template-columns: minmax(420px, 1fr) minmax(380px, 1fr); gap: 12px; margin-bottom: 12px; align-items: start; }
+.split .panel + .panel { margin-top: 0; }
+.log-panel { display: flex; flex-direction: column; }
+.log { height: 320px; overflow: auto; background: #0d1117; color: #c9d1d9; font: 12px/1.45 var(--mono); padding: 8px; border-radius: 6px; white-space: pre-wrap; word-break: break-word; }
+.log .ts { color: #6e7681; margin-right: 8px; }
+.log .warn { color: #d29922; } .log .error { color: #ff7b72; }
+.err { color: var(--bad); max-width: 520px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td .err { white-space: normal; }
+tr.superseded td { opacity: .55; }
+tr.detail td { background: var(--surface-2); }
+.stack { font: 11px/1.4 var(--mono); white-space: pre-wrap; background: var(--surface); border: 1px solid var(--border); padding: 8px; border-radius: 4px; max-height: 240px; overflow: auto; }
+.evidence { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0; }
+figure { margin: 0; max-width: 420px; } figcaption { font-size: 11px; color: var(--muted); }
+.artifact { display: inline-flex; align-items: center; gap: 4px; margin-right: 16px; cursor: pointer; }
+mat-icon.inline { font-size: 16px; width: 16px; height: 16px; vertical-align: text-bottom; color: var(--muted); }
+.chip { border: 1px solid var(--border); background: var(--surface); border-radius: 12px; padding: 1px 9px; font: inherit; font-size: 11px; cursor: pointer; color: var(--muted); }
+.chip.on { background: var(--selected); border-color: var(--accent); color: var(--accent); }
+.mt { margin-top: 12px; }
+.manual { display: inline-flex; gap: 4px; } .mini { min-width: 0 !important; padding: 0 8px !important; height: 26px !important; font-size: 11px !important; }
+a { cursor: pointer; }
+.defect-btn { margin-bottom: 8px; }

@@ -1,0 +1,136 @@
+<div class="toolbar">
+  <mat-form-field class="product">
+    <mat-label>Product</mat-label>
+    <mat-select [value]="productId()" (valueChange)="productChange.emit($event)">
+      @for (p of products(); track p.id) { <mat-option [value]="p.id">{{ p.name }} <span class="muted">({{ p.featureCount }})</span></mat-option> }
+    </mat-select>
+  </mat-form-field>
+  <div class="search-row">
+    <mat-form-field class="search">
+      <mat-icon matPrefix>search</mat-icon>
+      <input matInput placeholder="Search name or sequence" [value]="text()" (input)="onText($any($event.target).value)" />
+      @if (filtering()) { <button matSuffix mat-icon-button (click)="clearFilters()" matTooltip="Clear filters"><mat-icon>close</mat-icon></button> }
+    </mat-form-field>
+    <button mat-icon-button [matMenuTriggerFor]="filterMenu" matTooltip="Filters" [class.active]="filtering()"><mat-icon>filter_list</mat-icon></button>
+    <button mat-icon-button [matMenuTriggerFor]="treeMenu" matTooltip="Tree options"><mat-icon>more_vert</mat-icon></button>
+  </div>
+  <div class="quick">
+    <button class="chip" [class.on]="filter().recentDays" (click)="setFilter({ recentDays: filter().recentDays ? undefined : 30 })">Recent</button>
+    <button class="chip" [class.on]="filter().sinceLastRelease" (click)="setFilter({ sinceLastRelease: !filter().sinceLastRelease })">Since last release</button>
+    <button class="chip" [class.on]="filter().untested" (click)="setFilter({ untested: !filter().untested })">Untested</button>
+    <button class="chip" [class.on]="filter().missingAutomation" (click)="setFilter({ missingAutomation: !filter().missingAutomation })">No automation</button>
+  </div>
+</div>
+
+<mat-menu #filterMenu class="filter-menu">
+  <div class="filter-panel" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+    <mat-form-field class="full"><mat-label>Status</mat-label>
+      <mat-select [value]="filter().statusCode" (valueChange)="setFilter({ statusCode: $event })">
+        <mat-option [value]="undefined">Any</mat-option>
+        @for (s of ui.lookups()?.featureStatuses; track s.code) { <mat-option [value]="s.code">{{ s.name }}</mat-option> }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field class="full"><mat-label>Type</mat-label>
+      <mat-select [value]="filter().featureTypeCode" (valueChange)="setFilter({ featureTypeCode: $event })">
+        <mat-option [value]="undefined">Any</mat-option>
+        @for (s of ui.lookups()?.featureTypes; track s.code) { <mat-option [value]="s.code">{{ s.name }}</mat-option> }
+      </mat-select>
+    </mat-form-field>
+    <mat-form-field class="full"><mat-label>Application type</mat-label>
+      <mat-select [value]="filter().applicationType" (valueChange)="setFilter({ applicationType: $event })">
+        <mat-option [value]="undefined">Any</mat-option>
+        @for (a of ui.lookups()?.applicationTypes; track a) { <mat-option [value]="a">{{ a }}</mat-option> }
+      </mat-select>
+    </mat-form-field>
+    <div class="row">
+      <mat-form-field><mat-label>Sequence from</mat-label><input matInput type="number" [value]="filter().sequenceFrom ?? ''" (change)="setFilter({ sequenceFrom: +$any($event.target).value || undefined })" /></mat-form-field>
+      <mat-form-field><mat-label>to</mat-label><input matInput type="number" [value]="filter().sequenceTo ?? ''" (change)="setFilter({ sequenceTo: +$any($event.target).value || undefined })" /></mat-form-field>
+    </div>
+    <mat-form-field class="full"><mat-label>Created after</mat-label><input matInput type="date" [value]="filter().createdAfter?.slice(0, 10) ?? ''" (change)="setFilter({ createdAfter: $any($event.target).value ? $any($event.target).value + 'T00:00:00Z' : undefined })" /></mat-form-field>
+    <mat-form-field class="full"><mat-label>Sort results by</mat-label>
+      <mat-select [value]="filter().sortBy ?? 'sequence'" (valueChange)="setFilter({ sortBy: $event })">
+        <mat-option value="sequence">Creation sequence</mat-option><mat-option value="tree">Tree position</mat-option>
+        <mat-option value="name">Name</mat-option><mat-option value="created">Created date</mat-option>
+      </mat-select>
+    </mat-form-field>
+    <mat-checkbox [checked]="filter().includeDeprecated === false" (change)="setFilter({ includeDeprecated: $event.checked ? false : undefined })">Hide deprecated</mat-checkbox>
+  </div>
+</mat-menu>
+
+<mat-menu #treeMenu>
+  @if (auth.can('features.edit')) { <button mat-menu-item (click)="create(null)"><mat-icon>add</mat-icon>New top-level module</button> }
+  <button mat-menu-item [matMenuTriggerFor]="levels"><mat-icon>unfold_more</mat-icon>Expand to level</button>
+  <button mat-menu-item (click)="collapseAll()"><mat-icon>unfold_less</mat-icon>Collapse all</button>
+  <button mat-menu-item (click)="refreshLoaded()"><mat-icon>refresh</mat-icon>Refresh</button>
+  <mat-divider />
+  <button mat-menu-item (click)="export('xlsx')"><mat-icon>download</mat-icon>Export inventory (Excel)</button>
+  <button mat-menu-item (click)="export('csv')"><mat-icon>download</mat-icon>Export inventory (CSV)</button>
+  @if (auth.can('features.edit')) { <button mat-menu-item (click)="importInput.click()"><mat-icon>upload</mat-icon>Import features…</button> }
+</mat-menu>
+<mat-menu #levels>
+  @for (l of [1, 2, 3, 4, 5]; track l) { <button mat-menu-item (click)="expandToLevel(l)">Level {{ l }}</button> }
+</mat-menu>
+<input #importInput type="file" accept=".csv,.xlsx" hidden (change)="import(importInput)" />
+
+@if (searching() || isLoading('__root__')) { <mat-progress-bar mode="indeterminate" class="loading" /> }
+
+@if (filtering()) {
+  <div class="results">
+    <div class="results-head muted">{{ hitTotal() }} match(es){{ hitTotal() > hits().length ? ', showing ' + hits().length : '' }}</div>
+    @for (h of hits(); track h.node.id) {
+      <div class="hit" [class.selected]="h.node.id === selectedId()" (click)="select(h.node)" (dblclick)="showInTree(h)" (contextmenu)="openContext($event, h.node)">
+        <span class="seq">{{ h.node.sequenceDisplay }}</span>
+        <span class="cov" [attr.data-c]="h.node.coverageStatus" [matTooltip]="coverageTip(h.node)"></span>
+        <span class="name" [class.deprecated]="h.node.isDeprecated">{{ h.node.name }}</span>
+        <span class="crumbs">{{ crumbs(h) || '(top level)' }}</span>
+      </div>
+    } @empty { @if (!searching()) { <div class="empty">No features match.</div> } }
+  </div>
+} @else {
+  <cdk-virtual-scroll-viewport #viewport itemSize="26" class="tree" tabindex="0" (keydown)="onKey($event)" (contextmenu)="openContext($event, null)">
+    <div *cdkVirtualFor="let r of rows(); let i = index; trackBy: trackRow" class="node"
+         [class.selected]="r.node.id === selectedId()" [class.focused]="i === focusIndex()"
+         [class.drop-before]="dropTarget()?.id === r.node.id && dropTarget()?.zone === 'before'"
+         [class.drop-into]="dropTarget()?.id === r.node.id && dropTarget()?.zone === 'into'"
+         [style.padding-left.px]="6 + r.depth * 16"
+         draggable="true" (dragstart)="dragStart($event, r.node)" (dragover)="dragOver($event, r.node)" (dragleave)="dropTarget.set(null)"
+         (drop)="drop($event, r.node)" (dragend)="dragEnd()"
+         (click)="select(r.node, i)" (contextmenu)="$event.stopPropagation(); openContext($event, r.node)">
+      <button class="twisty" tabindex="-1" (click)="$event.stopPropagation(); toggle(r.node)" [style.visibility]="r.node.hasChildren ? 'visible' : 'hidden'">
+        <mat-icon>{{ isLoading(r.node.id) ? 'hourglass_empty' : isExpanded(r.node.id) ? 'expand_more' : 'chevron_right' }}</mat-icon>
+      </button>
+      <span class="seq">{{ r.node.sequenceDisplay }}</span>
+      <span class="name" [class.container]="r.node.hasChildren" [class.deprecated]="r.node.isDeprecated">{{ r.node.name }}</span>
+      @if (r.node.testCaseCount > 0) { <span class="count" [matTooltip]="coverageTip(r.node)">{{ r.node.automatedTestCount }}/{{ r.node.testCaseCount }}</span> }
+      <span class="cov" [attr.data-c]="r.node.coverageStatus" [matTooltip]="coverageTip(r.node)"></span>
+    </div>
+    @if (!rows().length && !isLoading('__root__')) {
+      <div class="empty">No features yet.@if (auth.can('features.edit')) { <br><button mat-button (click)="create(null)">Add the first module</button> }</div>
+    }
+  </cdk-virtual-scroll-viewport>
+}
+
+<div class="legend muted">
+  <span><i class="cov" data-c="NONE"></i>no tests</span><span><i class="cov" data-c="MANUAL"></i>manual</span>
+  <span><i class="cov" data-c="PARTIAL"></i>partly automated</span><span><i class="cov" data-c="AUTOMATED"></i>automated</span>
+</div>
+
+<div class="context-anchor" [style.left.px]="contextPos().x" [style.top.px]="contextPos().y" [matMenuTriggerFor]="contextMenu" #contextTrigger="matMenuTrigger"></div>
+<mat-menu #contextMenu>
+  @if (contextNode(); as n) {
+    <div class="menu-head mono">{{ n.sequenceDisplay }} {{ n.name }}</div>
+    @if (auth.can('features.edit')) {
+      <button mat-menu-item (click)="create(n)"><mat-icon>subdirectory_arrow_right</mat-icon>Add child</button>
+      <button mat-menu-item (click)="create(null)"><mat-icon>add</mat-icon>Add top-level module</button>
+      <button mat-menu-item (click)="duplicate(n)"><mat-icon>content_copy</mat-icon>Duplicate</button>
+      <button mat-menu-item (click)="move(n)"><mat-icon>drive_file_move</mat-icon>Move under…</button>
+      @if (n.parentId) { <button mat-menu-item (click)="moveToRoot(n)"><mat-icon>vertical_align_top</mat-icon>Move to top level</button> }
+      <button mat-menu-item (click)="deprecate(n)" [disabled]="n.isDeprecated"><mat-icon>block</mat-icon>Deprecate</button>
+      <button mat-menu-item (click)="remove(n)"><mat-icon>delete</mat-icon>Delete</button>
+      <mat-divider />
+    }
+    <button mat-menu-item (click)="copySequence(n)"><mat-icon>tag</mat-icon>Copy sequence number</button>
+  } @else if (auth.can('features.edit')) {
+    <button mat-menu-item (click)="create(null)"><mat-icon>add</mat-icon>New top-level module</button>
+  }
+</mat-menu>

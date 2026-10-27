@@ -1,0 +1,20 @@
+.num { font-family: var(--mono); color: var(--muted); }
+.summary-field { width: 240px; }
+.review-note { display: flex; gap: 8px; align-items: center; background: var(--warn-bg); margin-bottom: 8px; }
+.tab-body { padding: 12px 0; }
+.tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-top: 8px; }
+.tags a { cursor: pointer; margin-left: 2px; }
+.cell { font: inherit; padding: 5px 7px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); resize: vertical; }
+.steps { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.step { display: grid; grid-template-columns: 24px 24px 2fr 2fr 1fr auto; gap: 6px; align-items: start; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 6px; }
+.step .n { font-family: var(--mono); color: var(--muted); padding-top: 6px; }
+.step .shared { grid-column: span 3; padding-top: 6px; display: flex; align-items: center; gap: 6px; }
+.handle { cursor: grab; color: var(--muted); padding-top: 4px; }
+.cdk-drag-preview { box-shadow: 0 6px 18px rgba(0,0,0,.18); }
+.cdk-drag-placeholder { opacity: .3; }
+.dep { border-bottom: 1px solid var(--border); padding: 2px 0; }
+.history { display: grid; grid-template-columns: minmax(360px, 1fr) 2fr; gap: 12px; align-items: start; }
+.diff { display: grid; grid-template-columns: 140px 1fr 1fr; gap: 8px; border-bottom: 1px solid var(--border); padding: 4px 0; }
+.diff .field { font-weight: 600; }
+.diff pre { margin: 0; white-space: pre-wrap; font: 12px var(--mono); padding: 4px; border-radius: 4px; }
+.diff .a { background: var(--bad-bg); } .diff .b { background: var(--good-bg); }

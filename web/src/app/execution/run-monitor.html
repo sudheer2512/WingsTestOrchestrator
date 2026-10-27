@@ -1,0 +1,132 @@
+@if (detail(); as d) {
+  <div class="page">
+    <div class="page-head">
+      <a mat-icon-button routerLink="/runs"><mat-icon>arrow_back</mat-icon></a>
+      <span class="num">{{ d.run.numberDisplay }}</span>
+      <h1>{{ d.run.name }}</h1>
+      <app-status [value]="d.run.status" />
+      @if (d.run.schedulingPaused) { <span class="pill" data-tone="warn">scheduling paused</span> }
+      @if (d.run.cancelRequested && active()) { <span class="pill" data-tone="warn">cancelling…</span> }
+      <span class="spacer"></span>
+      @if (auth.can('tests.execute')) {
+        @if (active()) {
+          @if (d.run.schedulingPaused) { <button mat-stroked-button (click)="control('resume')"><mat-icon>play_arrow</mat-icon>Resume scheduling</button> }
+          @else { <button mat-stroked-button (click)="control('pause')" matTooltip="Stop handing queued jobs to agents; running jobs continue"><mat-icon>pause</mat-icon>Pause scheduling</button> }
+          <button mat-stroked-button (click)="priority()"><mat-icon>low_priority</mat-icon>Priority {{ d.run.priority }}</button>
+          <button mat-stroked-button (click)="control('cancel')"><mat-icon>stop</mat-icon>Cancel</button>
+        } @else {
+          <button mat-flat-button (click)="rerun(true)" [disabled]="!d.run.failed && !d.run.infrastructureErrors && !d.run.blocked"><mat-icon>replay</mat-icon>Re-run failed</button>
+          <button mat-stroked-button (click)="rerun(false)"><mat-icon>replay</mat-icon>Re-run all</button>
+        }
+      }
+    </div>
+
+    <div class="summary panel">
+      <div class="progress">
+        <app-run-bar [run]="d.run" />
+        <div class="stats">
+          <span><b class="ok">{{ d.run.passed }}</b> passed</span><span><b class="bad">{{ d.run.failed }}</b> failed</span>
+          <span><b>{{ d.run.blocked }}</b> blocked</span><span><b class="infra">{{ d.run.infrastructureErrors }}</b> infrastructure errors</span>
+          <span><b>{{ d.run.skipped }}</b> skipped</span><span><b>{{ d.run.notRun }}</b> not run</span><span><b>{{ d.run.pending }}</b> pending</span>
+          <span class="muted">of {{ d.run.totalTests }}</span>
+        </div>
+      </div>
+      <dl class="kv small">
+        <dt>Scope</dt><dd>{{ d.run.scopeDescription }}</dd>
+        @if (d.run.environmentName) { <dt>Environment</dt><dd>{{ d.run.environmentName }}{{ d.run.buildVersion ? ' · build ' + d.run.buildVersion : '' }}</dd> }
+        @else if (d.run.buildVersion) { <dt>Build</dt><dd>{{ d.run.buildVersion }}</dd> }
+        @if (d.run.triggeredBy && d.run.triggeredBy !== d.run.createdBy) { <dt>Trigger</dt><dd>{{ d.run.triggeredBy }}</dd> }
+        @if (d.run.planId) { <dt>Plan</dt><dd><a [routerLink]="['/plans', d.run.planId]">open plan</a></dd> }
+        <dt>Started by</dt><dd>{{ d.run.createdBy }} · {{ d.run.createdAt | date: 'medium' }}</dd>
+        <dt>Timing</dt><dd>{{ d.run.startedAt ? 'started ' + (d.run.startedAt | date: 'mediumTime') : 'waiting for an agent' }}{{ d.run.completedAt ? ' · finished ' + (d.run.completedAt | date: 'mediumTime') : '' }}</dd>
+        <dt>Policy</dt><dd>{{ d.maxInfrastructureRetries }} retr{{ d.maxInfrastructureRetries === 1 ? 'y' : 'ies' }} after agent failure · {{ d.timeoutMinutes }} min job timeout</dd>
+        @if (variables().length) { <dt>Variables</dt><dd class="mono">@for (v of variables(); track v[0]) { <div>{{ v[0] }}={{ v[1] }}</div> }</dd> }
+        @if (d.run.sourceRunId) { <dt>Re-run of</dt><dd><a [routerLink]="['/runs', d.run.sourceRunId]">source run</a></dd> }
+      </dl>
+    </div>
+
+    <div class="split">
+      <section class="panel">
+        <h3>Jobs</h3>
+        <table class="data">
+          <thead><tr><th>Package</th><th>Framework</th><th>Status</th><th>Agent</th><th>Tests</th><th>Started</th></tr></thead>
+          <tbody>
+            @for (j of d.jobs; track j.id) {
+              <tr class="clickable" [class.selected]="selectedJob() === j.id" (click)="selectJob(j)">
+                <td>{{ j.packageName }} <span class="muted">v{{ j.packageVersionNumber }}</span>@if (j.attempt > 1) { <span class="pill" data-tone="warn">attempt {{ j.attempt }}</span> }
+                  <div class="muted small">wave {{ j.wave + 1 }}{{ j.waitingOn ? ' · waiting for ' + j.waitingOn + ' prerequisite job(s)' : '' }}{{ j.resourceKeys ? ' · locks ' + j.resourceKeys : '' }}{{ j.dataRequirements ? ' · data ' + j.dataRequirements : '' }}</div></td>
+                <td>{{ j.framework }} @if (j.requiresDesktop) { <mat-icon class="inline" matTooltip="Needs an interactive Windows desktop agent">desktop_windows</mat-icon> }</td>
+                <td><app-status [value]="j.status === 'InfrastructureError' ? 'Failed' : j.status === 'Leased' ? 'Pending' : j.status" [label]="j.status | humanize" />
+                  @if (j.error) { <div class="err small" [title]="j.error">{{ j.error }}</div> }</td>
+                <td>{{ j.agentName ?? (j.status === 'Queued' ? 'waiting for a compatible agent' : '—') }}</td>
+                <td class="num">{{ j.testCount }}</td><td class="muted">{{ j.startedAt | date: 'mediumTime' }}</td>
+              </tr>
+            } @empty { <tr><td colspan="6" class="empty">No automated jobs in this run.</td></tr> }
+          </tbody>
+        </table>
+        @if (d.jobArtifacts.length) {
+          <h3 class="mt">Job evidence</h3>
+          @for (a of d.jobArtifacts; track a.id) { <a class="artifact" (click)="download(a)"><mat-icon class="inline">description</mat-icon>{{ a.fileName }} <span class="muted">{{ a.sizeBytes | bytes }}</span></a> }
+        }
+      </section>
+      <section class="panel log-panel">
+        <div class="row"><h3>Live log</h3>@if (job(); as j) { <span class="muted small">{{ j.packageName }} v{{ j.packageVersionNumber }} · {{ j.agentName ?? 'unassigned' }}</span> }
+          <span class="spacer"></span><label class="small"><input type="checkbox" [checked]="follow()" (change)="follow.set(!follow())" /> follow</label></div>
+        <div class="log" #logBox>
+          @for (l of logs(); track l.sequence) { <div [class]="'line ' + l.level"><span class="ts">{{ l.timestamp | date: 'HH:mm:ss' }}</span>{{ l.message }}</div> }
+          @empty { <div class="muted">{{ job()?.status === 'Queued' ? 'Waiting for an agent to pick up this job…' : 'No log lines yet.' }}</div> }
+        </div>
+      </section>
+    </div>
+
+    <section class="panel">
+      <div class="row wrap-row">
+        <h3>Test results</h3>
+        <button class="chip" [class.on]="outcomeFilter() === 'All'" (click)="outcomeFilter.set('All')">All</button>
+        @for (o of outcomes; track o) { @if (counts().get(o)) {
+          <button class="chip" [class.on]="outcomeFilter() === o" (click)="outcomeFilter.set(o)">{{ outcomeLabel(o) }} {{ counts().get(o) }}</button>
+        } }
+        <span class="spacer"></span>
+        <label class="small"><input type="checkbox" [checked]="showSuperseded()" (change)="showSuperseded.set(!showSuperseded())" /> show retried attempts</label>
+      </div>
+      <table class="data">
+        <thead><tr><th>Outcome</th><th>Test</th><th>Test case / feature</th><th>Duration</th><th>Agent</th><th>Evidence</th></tr></thead>
+        <tbody>
+          @for (t of tests(); track t.id) {
+            <tr class="clickable" [class.superseded]="t.isSuperseded" (click)="toggle(t)">
+              <td><app-status [value]="t.outcome === 'InfrastructureError' ? 'Warning' : t.outcome" [label]="outcomeLabel(t.outcome)" />@if (t.attempt > 1) { <span class="muted small"> #{{ t.attempt }}</span> }</td>
+              <td>{{ t.displayName }}<div class="mono muted small">{{ t.identifier }}</div>
+                @if (t.errorMessage) { <div class="err small">{{ t.errorMessage }}</div> } @else if (t.reason) { <div class="muted small">{{ t.reason }}</div> }</td>
+              <td class="small">@if (t.testCaseId) { <a [routerLink]="['/test-cases', t.testCaseId]" (click)="$event.stopPropagation()">{{ t.testCaseNumber }}</a> }
+                @if (t.featureId) { <div><a [routerLink]="['/features', t.featureId]" (click)="$event.stopPropagation()">{{ t.featureName }}</a></div> }</td>
+              <td class="num">{{ duration(t.durationMs) }}</td>
+              <td class="small">@if (t.isManual) {
+                @if (t.outcome === 'Pending' && auth.can('tests.execute')) {
+                  <span class="manual" (click)="$event.stopPropagation()">@for (o of manualOutcomes; track o) { <button mat-stroked-button class="mini" (click)="recordManual(t, o)">{{ o }}</button> }</span>
+                } @else { {{ t.executedBy ? 'manual · ' + t.executedBy : 'manual' }} }
+              } @else { {{ t.agentName }} }</td>
+              <td>@if (t.artifacts.length) { <mat-icon class="inline">attach_file</mat-icon>{{ t.artifacts.length }} }</td>
+            </tr>
+            @if (expanded() === t.id) {
+              <tr class="detail"><td colspan="6">
+                @if ((t.outcome === 'Failed' || t.outcome === 'Blocked') && auth.can('defects.manage')) {
+                  <button mat-stroked-button class="defect-btn" (click)="raiseDefect(t)"><mat-icon>bug_report</mat-icon>Raise or link defect</button> }
+                @if ((t.outcome === 'Failed' || t.outcome === 'Blocked' || t.outcome === 'InfrastructureError') && auth.can('ai.use')) {
+                  <a mat-stroked-button class="defect-btn" [routerLink]="['/ai']" [queryParams]="{ tab: 'failure', execution: t.id }"><mat-icon>auto_awesome</mat-icon>Analyse with AI</a> }
+                @if (t.stackTrace) { <pre class="stack">{{ t.stackTrace }}</pre> }
+                <div class="evidence">
+                  @for (a of images(t); track a.id) { <figure><app-artifact-image [runId]="d.run.id" [artifactId]="a.id" [name]="a.fileName" /><figcaption>{{ a.fileName }}</figcaption></figure> }
+                </div>
+                @for (a of others(t); track a.id) {
+                  <a class="artifact" (click)="download(a)"><mat-icon class="inline">{{ a.kind === 'Trace' ? 'timeline' : a.kind === 'Video' ? 'movie' : 'description' }}</mat-icon>{{ a.fileName }} <span class="muted">{{ a.kind }} · {{ a.sizeBytes | bytes }}</span></a>
+                }
+                @if (others(t).some(isTrace)) { <p class="muted small">Open traces with <span class="mono">npx playwright show-trace &lt;file&gt;</span>.</p> }
+                <p class="muted small">{{ t.startedAt ? 'Started ' + (t.startedAt | date: 'medium') : '' }} {{ t.completedAt ? '· finished ' + (t.completedAt | date: 'medium') : '' }}</p>
+              </td></tr>
+            }
+          } @empty { <tr><td colspan="6" class="empty">No tests match.</td></tr> }
+        </tbody>
+      </table>
+    </section>
+  </div>
+} @else { <mat-progress-bar mode="indeterminate" /> }

@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Wings.Agent.Contracts/Wings.Agent.Contracts.csproj" />
+    <Project Path="src/Wings.Agent/Wings.Agent.csproj" />
+    <Project Path="src/Wings.Api/Wings.Api.csproj" />
+    <Project Path="src/Wings.Application/Wings.Application.csproj" />
+    <Project Path="src/Wings.Domain/Wings.Domain.csproj" />
+    <Project Path="src/Wings.Infrastructure/Wings.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Wings.Tests/Wings.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,146 @@
+@if (v(); as v) {
+  <div class="page">
+    <div class="page-head">
+      <a mat-icon-button routerLink="/test-code"><mat-icon>arrow_back</mat-icon></a>
+      <h1>{{ v.packageName }}</h1>
+      <span class="ver">v{{ v.summary.versionNumber }}</span>
+      <app-status [value]="v.summary.status" [label]="v.summary.status | humanize" />
+      @if (v.summary.detectedFramework) { <span class="pill" data-tone="neutral">{{ v.summary.detectedFramework }}</span> }
+      @if (v.summary.platform !== 'None') { <span class="pill">{{ v.summary.platform }}</span> }
+      <span class="spacer"></span>
+      @if (v.summary.status === 'Validated' && auth.can('testcode.approve')) {
+        <button mat-flat-button (click)="review('approve')" [disabled]="busy()"><mat-icon>verified</mat-icon>Approve</button>
+      }
+      @if (['Validated', 'ValidationFailed', 'Approved'].includes(v.summary.status) && auth.can('testcode.approve')) {
+        <button mat-stroked-button (click)="review('reject')" [disabled]="busy()"><mat-icon>block</mat-icon>Reject</button>
+      }
+      @if (['Approved', 'Published'].includes(v.summary.status) && auth.can('tests.execute')) {
+        <button mat-stroked-button (click)="execute()"><mat-icon>play_arrow</mat-icon>Execute</button>
+      }
+      @if (v.summary.status === 'Approved' && auth.can('testcode.publish')) {
+        <button mat-flat-button (click)="act('publish')" [disabled]="busy()"><mat-icon>publish</mat-icon>Publish</button>
+      }
+      <button mat-icon-button [matMenuTriggerFor]="more"><mat-icon>more_vert</mat-icon></button>
+      <mat-menu #more>
+        <button mat-menu-item (click)="download()"><mat-icon>download</mat-icon>Download artifact</button>
+        @if (auth.can('testcode.upload')) {
+          <button mat-menu-item [routerLink]="['/test-code/upload']" [queryParams]="{ packageId: v.packageId }"><mat-icon>upload</mat-icon>Upload new version</button>
+          <button mat-menu-item (click)="act('revalidate')" [disabled]="!['Uploaded', 'ValidationFailed', 'Validated'].includes(v.summary.status)"><mat-icon>refresh</mat-icon>Re-run validation</button>
+        }
+        @if (auth.can('testcode.publish') && v.summary.status !== 'Deprecated') { <button mat-menu-item (click)="act('deprecate')"><mat-icon>archive</mat-icon>Deprecate</button> }
+      </mat-menu>
+    </div>
+    @if (pending()) { <mat-progress-bar mode="indeterminate" /> <p class="muted">Validating… this page updates automatically.</p> }
+
+    <div class="meta panel">
+      <dl class="kv">
+        <dt>Uploaded</dt><dd>{{ v.summary.createdAt | date: 'medium' }} by {{ v.summary.createdBy }} · {{ v.summary.originalFileName }} ({{ v.summary.sizeBytes | bytes }})</dd>
+        <dt>SHA-256</dt><dd class="mono">{{ v.summary.sha256 }}</dd>
+        <dt>Source</dt><dd>{{ v.sourceRepository || '—' }} @if (v.summary.sourceCommit) { <span class="mono">&#64;{{ v.summary.sourceCommit }}</span> }</dd>
+        @if (v.summary.parentVersionId) { <dt>Derived from</dt><dd><a [routerLink]="['/test-code/versions', v.summary.parentVersionId]">parent version</a> — {{ v.summary.changeNote }}</dd> }
+        @else if (v.summary.changeNote) { <dt>Change note</dt><dd>{{ v.summary.changeNote }}</dd> }
+        @if (v.reviewedBy) { <dt>Review</dt><dd>{{ v.reviewedBy }} · {{ v.reviewedAt | date: 'medium' }}{{ v.reviewComment ? ' — ' + v.reviewComment : '' }}</dd> }
+        @if (v.publishedBy) { <dt>Published</dt><dd>{{ v.publishedBy }} · {{ v.publishedAt | date: 'medium' }}</dd> }
+      </dl>
+      <div class="versions">
+        @for (s of siblings(); track s.id) {
+          <a [routerLink]="['/test-code/versions', s.id]" [class.on]="s.id === v.summary.id">v{{ s.versionNumber }} <app-status [value]="s.status" [label]="s.status | humanize" /></a>
+        }
+      </div>
+    </div>
+
+    <mat-tab-group animationDuration="0" mat-stretch-tabs="false">
+      <mat-tab [label]="'Validation' + (findingsCount() ? ' (' + findingsCount() + ')' : '')">
+        <div class="tab-body">
+          @for (s of v.report?.stages ?? []; track s.name) {
+            <div class="stage panel">
+              <div class="row"><app-status [value]="s.status" /><b>{{ s.name }}</b><span class="muted">{{ s.summary }}</span></div>
+              @for (f of s.findings; track $index) {
+                <div class="finding" [attr.data-sev]="f.severity"><mat-icon>{{ f.severity === 'error' ? 'error' : f.severity === 'warning' ? 'warning' : 'info' }}</mat-icon>
+                  <span>{{ f.message }}</span>@if (f.file) { <span class="mono muted">{{ f.file }}{{ f.line ? ':' + f.line : '' }}</span> }</div>
+              }
+            </div>
+          } @empty { <p class="muted">Validation has not produced a report yet.</p> }
+        </div>
+      </mat-tab>
+
+      <mat-tab [label]="'Discovered tests (' + v.tests.length + ')'">
+        <div class="tab-body">
+          @if (featureId() && unmapped().length && auth.can('testcode.upload')) {
+            <div class="panel row hint"><mat-icon>link</mat-icon>{{ unmapped().length }} test(s) are not mapped to a feature.
+              <button mat-stroked-button (click)="mapAllTo(featureId()!)">Map them to the feature you came from</button></div>
+          }
+          <table class="data">
+            <thead><tr><th>Test</th><th>Framework</th><th>Location</th><th>Feature</th><th>Test case</th><th></th></tr></thead>
+            <tbody>
+              @for (t of v.tests; track t.id) {
+                <tr>
+                  <td>{{ t.displayName }}<div class="mono muted small">{{ t.identifier }}</div>@if (t.traits) { <div class="muted small">{{ traits(t) }}</div> }</td>
+                  <td>{{ t.framework }}</td><td class="mono small"><a (click)="openPath(t.filePath)">{{ t.filePath }}:{{ t.line }}</a></td>
+                  <td>@if (t.featureId) { <a [routerLink]="['/features', t.featureId]"><span class="mono muted">{{ t.featureSequence }}</span> {{ t.featureName }}</a> } @else { <span class="muted">—</span> }</td>
+                  <td>@if (t.testCaseId) { <a [routerLink]="['/test-cases', t.testCaseId]">{{ t.testCaseNumber }} {{ t.testCaseName }}</a> } @else { <span class="muted">—</span> }</td>
+                  <td class="actions">
+                    @if (auth.can('testcode.upload')) {
+                      <button mat-icon-button [matMenuTriggerFor]="mapMenu"><mat-icon>link</mat-icon></button>
+                      <mat-menu #mapMenu>
+                        <button mat-menu-item (click)="mapFeature(t)">Map to feature…</button>
+                        <button mat-menu-item (click)="mapTestCase(t)">Link to existing test case…</button>
+                        <button mat-menu-item (click)="createTestCase(t)" [disabled]="!!t.testCaseId">Create test case from this test</button>
+                        <button mat-menu-item (click)="unmap(t)" [disabled]="!t.featureId && !t.testCaseId">Remove mappings</button>
+                      </mat-menu>
+                    }
+                  </td>
+                </tr>
+              } @empty { <tr><td colspan="6" class="empty">No tests discovered.</td></tr> }
+            </tbody>
+          </table>
+        </div>
+      </mat-tab>
+
+      <mat-tab [label]="'Files (' + v.files.length + ')'">
+        <div class="tab-body files">
+          <div class="file-list">
+            <input class="cell" placeholder="Filter files" [ngModel]="fileFilter()" (ngModelChange)="fileFilter.set($event)" />
+            @for (f of files(); track f.id) {
+              <a class="file" [class.on]="selectedFile()?.path === f.path" (click)="openFile(f)">
+                <span>{{ f.path }}</span>@if (edits().has(f.path)) { <span class="pill" data-tone="warn">edited</span> }<span class="muted">{{ f.sizeBytes | bytes }}</span>
+              </a>
+            }
+          </div>
+          <div class="viewer">
+            @if (selectedFile(); as f) {
+              <div class="row bar">
+                <span class="mono">{{ f.path }}</span><span class="muted mono small">{{ f.sha256.slice(0, 12) }}</span><span class="spacer"></span>
+                @if (f.isText) {
+                  <button mat-button (click)="toggleCompare()" [disabled]="editing()"><mat-icon>compare</mat-icon>{{ compareWithParent() ? 'Hide diff' : 'Diff with previous version' }}</button>
+                  @if (auth.can('testcode.edit')) {
+                    @if (!editing()) { <button mat-stroked-button (click)="editing.set(true); compareWithParent.set(false); parentContent.set(undefined)"><mat-icon>edit</mat-icon>Edit</button> }
+                    @else {
+                      <button mat-button (click)="discardEdits()">Discard</button>
+                      <button mat-flat-button [disabled]="!edits().size" (click)="saveEdits()"><mat-icon>save</mat-icon>Save {{ edits().size }} file(s) as new version</button>
+                    }
+                  }
+                }
+              </div>
+              @if (f.isText) {
+                <app-code-editor class="editor" [value]="fileContent()" [language]="fileLanguage()" [readOnly]="!editing()" [original]="parentContent()" (valueChange)="onEdit($event)" />
+              } @else { <p class="empty">Binary file — not displayed.</p> }
+              <p class="muted small">Ctrl/⌘+F to search, Ctrl/⌘+Alt+F (or ⌘+Option+F) to replace. Edits never overwrite this version; saving creates a new version that is validated and reviewed again.</p>
+            } @else { <p class="empty">Select a file.</p> }
+          </div>
+        </div>
+      </mat-tab>
+
+      <mat-tab label="History">
+        <div class="tab-body">
+          @for (a of audit(); track a.id) {
+            <div class="audit"><div class="row"><strong>{{ a.action }}</strong><span class="pill">{{ a.entityType }}</span><span class="muted">{{ a.userName }} · {{ a.timestamp | date: 'medium' }}</span></div>
+              @if (a.summary) { <div class="muted">{{ a.summary }}</div> }
+              @for (c of a.changesJson | auditChanges; track c.field) { @if (c.field === 'Status') { <div class="small">Status: {{ c.old }} → {{ c.new }}</div> } }
+            </div>
+          }
+        </div>
+      </mat-tab>
+    </mat-tab-group>
+  </div>
+} @else { <mat-progress-bar mode="indeterminate" /> }

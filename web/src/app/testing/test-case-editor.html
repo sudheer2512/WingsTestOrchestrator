@@ -1,0 +1,215 @@
+@if (loading()) { <mat-progress-bar mode="indeterminate" /> }
+<div class="page">
+  <div class="page-head">
+    <a mat-icon-button routerLink="/test-cases"><mat-icon>arrow_back</mat-icon></a>
+    @if (detail(); as d) {
+      <span class="num">{{ d.numberDisplay }}</span>
+      <h1>{{ d.fields.name }}</h1>
+      <app-status [value]="d.reviewStatus" [label]="d.reviewStatus | humanize" />
+      <span class="muted">revision {{ d.revision }}</span>
+      @if (d.fields.isTemplate) { <span class="tag">template</span> }
+      @if (d.fields.isSharedSteps) { <span class="tag">shared steps</span> }
+    } @else { <h1>New test case</h1> }
+    <span class="spacer"></span>
+    @if (canEdit()) {
+      <mat-form-field class="summary-field"><mat-label>Change summary (optional)</mat-label><input matInput [(ngModel)]="changeSummary" /></mat-form-field>
+      <button mat-flat-button (click)="save()" [disabled]="saving() || (!dirty() && !isNew())"><mat-icon>save</mat-icon>{{ isNew() ? 'Create' : 'Save' }}</button>
+    }
+    @if (detail(); as d) {
+      @if (auth.can('ai.use') && !d.fields.isSharedSteps) {
+        <a mat-stroked-button [routerLink]="['/ai']" [queryParams]="{ tab: 'code', testCase: d.id, testCaseNumber: d.numberDisplay }"><mat-icon>auto_awesome</mat-icon>Draft code with AI</a>
+      }
+      @if (canEdit() && (d.reviewStatus === 'Draft' || d.reviewStatus === 'Rejected')) {
+        <button mat-stroked-button (click)="workflow('submit')" [disabled]="dirty()" [matTooltip]="dirty() ? 'Save first' : ''"><mat-icon>send</mat-icon>Submit for review</button>
+      }
+      @if (auth.can('testcases.approve') && d.reviewStatus === 'InReview') {
+        <button mat-stroked-button (click)="workflow('approve')"><mat-icon>verified</mat-icon>Approve</button>
+        <button mat-stroked-button (click)="workflow('reject')"><mat-icon>undo</mat-icon>Reject</button>
+      }
+      @if (auth.can('tests.execute') && d.automation.length) {
+        <button mat-stroked-button (click)="execute()" [matTooltip]="'Runs the published automation linked to this test case'"><mat-icon>play_arrow</mat-icon>Execute</button>
+      }
+      <button mat-icon-button [matMenuTriggerFor]="more"><mat-icon>more_vert</mat-icon></button>
+      <mat-menu #more>
+        @if (canEdit()) {
+          <button mat-menu-item (click)="clone(false)"><mat-icon>content_copy</mat-icon>Clone</button>
+          <button mat-menu-item (click)="clone(true)"><mat-icon>content_paste</mat-icon>Save as template</button>
+          @if (d.fields.isTemplate) { <button mat-menu-item (click)="newFromTemplate()"><mat-icon>note_add</mat-icon>New test case from this template</button> }
+          <button mat-menu-item (click)="remove()"><mat-icon>delete</mat-icon>Delete</button>
+        }
+      </mat-menu>
+    }
+  </div>
+  @if (detail()?.reviewComment; as c) { <div class="panel review-note"><mat-icon>comment</mat-icon> {{ c }}</div> }
+
+  <mat-tab-group animationDuration="0" mat-stretch-tabs="false">
+    <mat-tab label="Details">
+      <div class="tab-body">
+        <section class="panel">
+          <mat-form-field class="full"><mat-label>Name</mat-label><input matInput [(ngModel)]="f.name" (ngModelChange)="touch()" required [readonly]="!canEdit()" /></mat-form-field>
+          <div class="grid-3">
+            <mat-form-field><mat-label>Test type</mat-label><mat-select [(ngModel)]="f.testTypeCode" (ngModelChange)="touch()" [disabled]="!canEdit()">
+              @for (t of ui.lookups()?.testTypes; track t.code) { <mat-option [value]="t.code">{{ t.name }}</mat-option> }</mat-select></mat-form-field>
+            <mat-form-field><mat-label>Platform</mat-label><mat-select [(ngModel)]="f.platform" (ngModelChange)="touch()" [disabled]="!canEdit()">
+              @for (t of ui.lookups()?.applicationTypes; track t) { <mat-option [value]="t">{{ t }}</mat-option> }</mat-select></mat-form-field>
+            <mat-form-field><mat-label>Automation framework</mat-label><mat-select [(ngModel)]="f.frameworkCode" (ngModelChange)="touch()" [disabled]="!canEdit()">
+              <mat-option [value]="undefined">—</mat-option>@for (t of frameworks(); track t.code) { <mat-option [value]="t.code">{{ t.name }}</mat-option> }</mat-select></mat-form-field>
+            <mat-form-field><mat-label>Automation status</mat-label><mat-select [(ngModel)]="f.automationStatus" (ngModelChange)="touch()" [disabled]="!canEdit()">
+              @for (a of automationStatuses; track a) { <mat-option [value]="a">{{ a | humanize }}</mat-option> }</mat-select></mat-form-field>
+            <mat-form-field><mat-label>Priority</mat-label><mat-select [(ngModel)]="f.priority" (ngModelChange)="touch()" [disabled]="!canEdit()">
+              @for (p of ui.lookups()?.priorities; track p) { <mat-option [value]="p">{{ p }}</mat-option> }</mat-select></mat-form-field>
+            <mat-form-field><mat-label>Severity of failure</mat-label><mat-select [(ngModel)]="f.failureSeverity" (ngModelChange)="touch()" [disabled]="!canEdit()">
+              @for (p of ui.lookups()?.severities; track p) { <mat-option [value]="p">{{ p | humanize }}</mat-option> }</mat-select></mat-form-field>
+            <mat-form-field><mat-label>Owner</mat-label><input matInput [(ngModel)]="f.ownerUserName" (ngModelChange)="touch()" [readonly]="!canEdit()" /></mat-form-field>
+            <mat-form-field><mat-label>Estimated duration (minutes)</mat-label><input matInput type="number" min="0" [(ngModel)]="f.estimatedDurationMinutes" (ngModelChange)="touch()" [readonly]="!canEdit()" /></mat-form-field>
+            <mat-form-field><mat-label>Folder</mat-label><mat-select [(ngModel)]="f.folderId" (ngModelChange)="touch()" [disabled]="!canEdit()">
+              <mat-option [value]="undefined">—</mat-option>@for (x of folders(); track x.id) { <mat-option [value]="x.id">{{ x.name }}</mat-option> }</mat-select></mat-form-field>
+          </div>
+          <div class="row">
+            <mat-checkbox [(ngModel)]="f.isSharedSteps" (ngModelChange)="touch()" [disabled]="!canEdit()">Reusable shared steps</mat-checkbox>
+            <mat-checkbox [(ngModel)]="f.isTemplate" (ngModelChange)="touch()" [disabled]="!canEdit()">Template</mat-checkbox>
+            <mat-checkbox [(ngModel)]="f.isDestructive" (ngModelChange)="touch()" [disabled]="!canEdit()" matTooltip="Changes or deletes business data; skipped on production unless explicitly authorised">Destructive</mat-checkbox>
+          </div>
+          <div class="tags">
+            @for (t of f.tags; track t) { <span class="tag">{{ t }} @if (canEdit()) { <a (click)="removeTag(t)">×</a> }</span> }
+            @if (canEdit()) { <input class="cell" placeholder="Add tag + Enter" [(ngModel)]="tagInput" (keydown.enter)="addTag()" /> }
+          </div>
+        </section>
+        <section class="panel grid-2">
+          <mat-form-field class="full"><mat-label>Description</mat-label><textarea matInput rows="3" [(ngModel)]="f.description" (ngModelChange)="touch()" [readonly]="!canEdit()"></textarea></mat-form-field>
+          <mat-form-field class="full"><mat-label>Testing objective</mat-label><textarea matInput rows="3" [(ngModel)]="f.objective" (ngModelChange)="touch()" [readonly]="!canEdit()"></textarea></mat-form-field>
+          <mat-form-field class="full"><mat-label>Preconditions</mat-label><textarea matInput rows="3" [(ngModel)]="f.preconditions" (ngModelChange)="touch()" [readonly]="!canEdit()"></textarea></mat-form-field>
+          <mat-form-field class="full"><mat-label>Test data requirements</mat-label><textarea matInput rows="3" [(ngModel)]="f.testDataRequirements" (ngModelChange)="touch()" [readonly]="!canEdit()"></textarea></mat-form-field>
+          <mat-form-field class="full"><mat-label>Expected results</mat-label><textarea matInput rows="3" [(ngModel)]="f.expectedResults" (ngModelChange)="touch()" [readonly]="!canEdit()"></textarea></mat-form-field>
+          <mat-form-field class="full"><mat-label>Cleanup steps</mat-label><textarea matInput rows="3" [(ngModel)]="f.cleanupSteps" (ngModelChange)="touch()" [readonly]="!canEdit()"></textarea></mat-form-field>
+        </section>
+        <section class="panel grid-2">
+          <mat-form-field class="full"><mat-label>Exclusive resources (comma separated)</mat-label>
+            <input matInput class="mono" [(ngModel)]="f.resourceKeys" (ngModelChange)="touch()" [readonly]="!canEdit()" placeholder="db:AUTO-QA, user:sales01" />
+            <mat-hint>Locked while the test runs, so no other job uses them at the same time.</mat-hint></mat-form-field>
+          <mat-form-field class="full"><mat-label>Test data (DATASET[:count], comma separated)</mat-label>
+            <input matInput class="mono" [(ngModel)]="f.dataRequirements" (ngModelChange)="touch()" [readonly]="!canEdit()" placeholder="CUSTOMERS:2, VEHICLES" />
+            <mat-hint>Records are reserved for the job and written to WINGS_CONTEXT_FILE.</mat-hint></mat-form-field>
+        </section>
+        <section class="panel">
+          <mat-form-field class="full">
+            <mat-label>Parameter sets (JSON)</mat-label>
+            <textarea matInput rows="4" class="mono" [(ngModel)]="f.parametersJson" (ngModelChange)="touch()" [readonly]="!canEdit()"
+                      placeholder='[{"name": "GST 18%", "values": {"rate": "18"}}, {"name": "GST 5%", "values": {"rate": "5"}}]'></textarea>
+            <mat-hint>Each set runs the same steps with different data. Leave empty for a non-parameterised test.</mat-hint>
+          </mat-form-field>
+        </section>
+      </div>
+    </mat-tab>
+
+    <mat-tab [label]="'Steps (' + f.steps.length + ')'">
+      <div class="tab-body">
+        <div cdkDropList (cdkDropListDropped)="dropStep($event)" class="steps">
+          @for (s of f.steps; track $index; let i = $index) {
+            <div class="step" cdkDrag [cdkDragDisabled]="!canEdit()">
+              <span class="handle" cdkDragHandle><mat-icon>drag_indicator</mat-icon></span>
+              <span class="n">{{ i + 1 }}</span>
+              @if (s.sharedStepsTestCaseId) {
+                <div class="shared"><mat-icon>share</mat-icon> Calls shared steps: <a [routerLink]="['/test-cases', s.sharedStepsTestCaseId]">{{ s.sharedStepsName ?? s.sharedStepsTestCaseId }}</a></div>
+              } @else {
+                <textarea class="cell" rows="2" placeholder="Action" [(ngModel)]="s.action" (ngModelChange)="touch()" [readonly]="!canEdit()"></textarea>
+                <textarea class="cell" rows="2" placeholder="Expected result" [(ngModel)]="s.expectedResult" (ngModelChange)="touch()" [readonly]="!canEdit()"></textarea>
+                <textarea class="cell" rows="2" placeholder="Test data" [(ngModel)]="s.testData" (ngModelChange)="touch()" [readonly]="!canEdit()"></textarea>
+              }
+              @if (canEdit()) { <button mat-icon-button (click)="removeStep(i)"><mat-icon>close</mat-icon></button> }
+            </div>
+          } @empty { <p class="empty">No steps yet.</p> }
+        </div>
+        @if (canEdit()) {
+          <div class="row"><button mat-stroked-button (click)="addStep()"><mat-icon>add</mat-icon>Add step</button>
+            <button mat-stroked-button (click)="addSharedSteps()"><mat-icon>share</mat-icon>Insert shared steps</button></div>
+        }
+      </div>
+    </mat-tab>
+
+    <mat-tab [label]="'Coverage (' + features().length + ')'">
+      <div class="tab-body">
+        <section class="panel">
+          <div class="row"><h3>Linked features</h3><span class="spacer"></span>
+            @if (canEdit()) { <button mat-stroked-button (click)="pickFeature()"><mat-icon>add_link</mat-icon>Link feature</button> }</div>
+          <table class="data">
+            <thead><tr><th>Primary</th><th>Sequence</th><th>Feature</th><th>Product</th><th></th></tr></thead>
+            <tbody>
+              @for (l of features(); track l.featureId) {
+                <tr>
+                  <td><input type="radio" name="primary" [checked]="f.primaryFeatureId === l.featureId" [disabled]="!canEdit()" (change)="patch({ primaryFeatureId: l.featureId })" /></td>
+                  <td class="num">{{ l.sequenceDisplay }}</td><td><a [routerLink]="['/features', l.featureId]">{{ l.name }}</a></td><td>{{ l.productName }}</td>
+                  <td>@if (canEdit()) { <button mat-icon-button (click)="removeFeature(l.featureId)"><mat-icon>link_off</mat-icon></button> }</td>
+                </tr>
+              } @empty { <tr><td colspan="5" class="empty">Link at least one feature so coverage is tracked.</td></tr> }
+            </tbody>
+          </table>
+        </section>
+        <section class="panel">
+          <h3>Requirements verified</h3>
+          @for (r of requirementOptions(); track r.id) {
+            <div><mat-checkbox [checked]="f.requirementIds.includes(r.id)" [disabled]="!canEdit()" (change)="toggleRequirement(r.id, $event.checked)">{{ r.label }}</mat-checkbox></div>
+          } @empty { <p class="muted">The linked features have no requirements recorded.</p> }
+        </section>
+      </div>
+    </mat-tab>
+
+    @if (detail(); as d) {
+      <mat-tab [label]="'Automation & suites'">
+        <div class="tab-body">
+          <section class="panel">
+            <h3>Automated by</h3>
+            <table class="data">
+              <thead><tr><th>Package</th><th>Version</th><th>Test identifier</th><th>Location</th></tr></thead>
+              <tbody>
+                @for (a of d.automation; track a.identifier + a.versionNumber) {
+                  <tr><td>{{ a.packageName }}</td><td>v{{ a.versionNumber }} <app-status [value]="a.status" [label]="a.status | humanize" /></td>
+                    <td class="mono">{{ a.identifier }}</td><td class="mono">{{ a.filePath }}:{{ a.line }}</td></tr>
+                } @empty { <tr><td colspan="4" class="empty">Not linked to uploaded test code. Map a discovered test to this test case from the Test code screen.</td></tr> }
+              </tbody>
+            </table>
+          </section>
+          <section class="panel">
+            <h3>Member of suites</h3>
+            @for (s of d.suites; track s.id) { <div><a [routerLink]="['/suites', s.id]">{{ s.numberDisplay }} {{ s.name }}</a></div> } @empty { <p class="muted">Not in any suite.</p> }
+          </section>
+        </div>
+      </mat-tab>
+
+      <mat-tab [label]="'Dependencies (' + d.dependencies.length + ')'">
+        <div class="tab-body">
+          <p class="muted">Test cases that must run (and pass) before this one. Cycles are rejected.</p>
+          @for (dep of d.dependencies; track dep.id) {
+            <div class="row dep"><span class="num">{{ dep.numberDisplay }}</span><a [routerLink]="['/test-cases', dep.dependsOnTestCaseId]">{{ dep.name }}</a>
+              <span class="pill">{{ dep.type | humanize }}</span><span class="spacer"></span>
+              @if (canEdit()) { <button mat-icon-button (click)="removeDependency(dep.id)"><mat-icon>close</mat-icon></button> }</div>
+          } @empty { <p class="muted">No prerequisites.</p> }
+          @if (canEdit()) { <button mat-stroked-button (click)="addDependency()"><mat-icon>add</mat-icon>Add prerequisite</button> }
+        </div>
+      </mat-tab>
+
+      <mat-tab [label]="'History (' + versions().length + ')'">
+        <div class="tab-body">
+          <div class="history">
+            <table class="data">
+              <thead><tr><th>Rev.</th><th>When</th><th>By</th><th>Summary</th><th>A</th><th>B</th></tr></thead>
+              <tbody>
+                @for (v of versions(); track v.revision) {
+                  <tr><td class="num">r{{ v.revision }}</td><td>{{ v.createdAt | date: 'medium' }}</td><td>{{ v.createdBy }}</td><td>{{ v.changeSummary }}</td>
+                    <td><input type="radio" name="a" [checked]="compareA() === v.revision" (change)="compareA.set(v.revision)" /></td>
+                    <td><input type="radio" name="b" [checked]="compareB() === v.revision" (change)="compareB.set(v.revision)" /></td></tr>
+                }
+              </tbody>
+            </table>
+            <section class="panel">
+              <h3>Differences r{{ compareA() }} → r{{ compareB() }}</h3>
+              @for (row of diff(); track row.field) {
+                <div class="diff"><div class="field">{{ row.field }}</div><pre class="a">{{ row.a || '∅' }}</pre><pre class="b">{{ row.b || '∅' }}</pre></div>
+              } @empty { <p class="muted">Select two different revisions to compare.</p> }
+            </section>
+          </div>
+        </div>
+      </mat-tab>
+    }
+  </mat-tab-group>
+</div>

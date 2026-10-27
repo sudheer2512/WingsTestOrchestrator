@@ -1,0 +1,26 @@
+.ver { font-family: var(--mono); font-size: 16px; color: var(--muted); }
+.meta { display: grid; grid-template-columns: 1fr auto; gap: 12px; margin-bottom: 8px; }
+.versions { display: flex; flex-direction: column; gap: 2px; min-width: 160px; }
+.versions a { text-decoration: none; color: var(--text); padding: 2px 6px; border-radius: 4px; }
+.versions a.on { background: var(--selected); }
+.tab-body { padding: 12px 0; }
+.stage { padding: 8px 12px; }
+.finding { display: flex; align-items: center; gap: 6px; padding: 2px 0 2px 8px; font-size: 12px; }
+.finding mat-icon { font-size: 16px; width: 16px; height: 16px; }
+.finding[data-sev='error'] mat-icon { color: var(--bad); }
+.finding[data-sev='warning'] mat-icon { color: var(--warn); }
+.finding[data-sev='info'] mat-icon { color: var(--accent); }
+.hint { background: var(--selected); margin-bottom: 8px; }
+.small { font-size: 11px; }
+td.actions { width: 1%; white-space: nowrap; }
+.files { display: grid; grid-template-columns: 300px 1fr; gap: 12px; height: calc(100vh - 300px); min-height: 420px; }
+.file-list { overflow: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; }
+.file-list .cell { width: calc(100% - 12px); margin: 6px; }
+.file { display: flex; gap: 6px; align-items: center; justify-content: space-between; padding: 3px 8px; font-family: var(--mono); font-size: 12px; cursor: pointer; color: var(--text); text-decoration: none; word-break: break-all; }
+.file:hover { background: var(--hover); } .file.on { background: var(--selected); }
+.viewer { display: flex; flex-direction: column; min-height: 0; }
+.bar { margin-bottom: 6px; }
+.editor { flex: 1; min-height: 0; }
+.cell { font: inherit; padding: 5px 7px; border: 1px solid var(--border); border-radius: 4px; }
+.audit { padding: 6px 0; border-bottom: 1px solid var(--border); }
+a { cursor: pointer; }

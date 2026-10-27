@@ -1,0 +1,19 @@
+bin/
+obj/
+*.user
+.vs/
+.idea/
+**/App_Data/
+*.db
+*.db-shm
+*.db-wal
+web/node_modules/
+web/dist/
+web/.angular/
+src/Wings.Api/wwwroot/
+TestResults/
+.DS_Store
+src/Wings.Api/appsettings.Development.json
+
+# Local tool configuration (machine-specific paths)
+.claude/

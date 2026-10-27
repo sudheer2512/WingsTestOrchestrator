@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SAMPLE – Wings Auto customer portal: online booking</title>
+  <style>
+    body { font: 15px system-ui, sans-serif; margin: 0; background: #f4f6f8; color: #1f2328; }
+    header { background: #0b3d91; color: #fff; padding: 12px 20px; }
+    main { max-width: 520px; margin: 24px auto; background: #fff; padding: 24px; border-radius: 8px; }
+    label { display: block; margin-top: 12px; font-weight: 600; }
+    input, select { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; }
+    button { margin-top: 18px; padding: 9px 18px; background: #0b63ce; color: #fff; border: 0; border-radius: 4px; }
+    .error { color: #cf222e; font-size: 13px; } .result { margin-top: 18px; padding: 12px; background: #dafbe1; display: none; }
+    .note { font-size: 12px; color: #656d76; }
+  </style>
+</head>
+<body>
+  <header>Wings Auto · Customer portal <small>(SAMPLE application for demonstrating browser automation)</small></header>
+  <main>
+    <h1>Book a vehicle</h1>
+    <form id="f" novalidate>
+      <label for="model">Model</label>
+      <select id="model" data-testid="model">
+        <option value="">Select…</option>
+        <option value="sedan" data-price="1250000">Sedan LX – ₹12,50,000</option>
+        <option value="suv" data-price="1890000">SUV Pro – ₹18,90,000</option>
+      </select>
+      <label for="name">Customer name</label>
+      <input id="name" data-testid="customer-name" autocomplete="off">
+      <label for="mobile">Mobile number</label>
+      <input id="mobile" data-testid="mobile" inputmode="numeric" autocomplete="off">
+      <div id="mobile-error" class="error" data-testid="mobile-error" hidden>Enter a 10-digit mobile number.</div>
+      <label><input type="checkbox" id="festival" data-testid="festival-offer" style="width:auto"> Apply festival offer (5% off)</label>
+      <div class="note">Payable amount: <span id="amount" data-testid="payable-amount">—</span></div>
+      <button type="submit" data-testid="submit">Book now</button>
+    </form>
+    <div class="result" id="result">Booking confirmed: <strong id="number" data-testid="booking-number"></strong></div>
+  </main>
+  <script>
+    let next = 5001;
+    const $ = id => document.getElementById(id);
+    function amount() {
+      const opt = $('model').selectedOptions[0];
+      const price = Number(opt?.dataset.price || 0);
+      // SAMPLE DEFECT (intentional): the offer subtracts 5% of 1,00,000 instead of 5% of the price,
+      // so the orchestrator's failure-investigation workflow has a real failing test to show.
+      const discounted = $('festival').checked ? price - 5000 : price;
+      $('amount').textContent = price ? '₹' + discounted.toLocaleString('en-IN') : '—';
+    }
+    ['model', 'festival'].forEach(id => $(id).addEventListener('change', amount));
+    $('f').addEventListener('submit', e => {
+      e.preventDefault();
+      const ok = /^\d{10}$/.test($('mobile').value);
+      $('mobile-error').hidden = ok;
+      if (!ok || !$('model').value || !$('name').value.trim()) return;
+      $('number').textContent = 'BK-' + next++;
+      $('result').style.display = 'block';
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,160 @@
+<div class="page">
+  <div class="page-head"><h1>Administration</h1></div>
+  <mat-tab-group animationDuration="0" mat-stretch-tabs="false">
+    <mat-tab label="Products & releases">
+      <div class="tab-body split">
+        <div>
+          <table class="data">
+            <thead><tr><th>Code</th><th>Product</th><th>Numbering scope</th><th>Features</th><th>Active</th></tr></thead>
+            <tbody>
+              @for (p of products(); track p.id) {
+                <tr class="clickable" [class.selected]="selectedProduct()?.id === p.id" (click)="selectProduct(p)">
+                  <td class="num">{{ p.code }}</td><td>{{ p.name }}</td><td class="mono small">{{ p.sequenceScopeKey }}</td><td class="num">{{ p.featureCount }}</td><td>{{ p.isActive ? 'Yes' : 'No' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          @if (auth.can('products.manage')) {
+            <div class="panel">
+              <h3>New product</h3>
+              <div class="grid-2">
+                <mat-form-field><mat-label>Code</mat-label><input matInput [(ngModel)]="newProduct.code" placeholder="BOOKS" /></mat-form-field>
+                <mat-form-field><mat-label>Name</mat-label><input matInput [(ngModel)]="newProduct.name" placeholder="Wings Books" /></mat-form-field>
+              </div>
+              <mat-form-field class="full"><mat-label>Description</mat-label><input matInput [(ngModel)]="newProduct.description" /></mat-form-field>
+              <mat-form-field class="full"><mat-label>Numbering scope</mat-label>
+                <mat-select [(ngModel)]="newProduct.sequenceScopeKey">
+                  <mat-option value="">Dedicated sequence for this product</mat-option>
+                  @for (s of ui.lookups()?.sequenceScopes; track s.id) { @if (s.key.startsWith('PRODUCT:')) { <mat-option [value]="s.key">Share with {{ s.name }} ({{ s.key }})</mat-option> } }
+                </mat-select>
+                <mat-hint>Fixed after creation. Features can only move between products that share a scope.</mat-hint>
+              </mat-form-field>
+              <button mat-flat-button [disabled]="!newProduct.code || !newProduct.name" (click)="createProduct()">Create product</button>
+            </div>
+          }
+        </div>
+        @if (selectedProduct(); as p) {
+          <div class="panel">
+            <h2>{{ p.name }}</h2>
+            @if (auth.can('products.manage')) {
+              <mat-form-field class="full"><mat-label>Name</mat-label><input matInput [(ngModel)]="productDraft.name" /></mat-form-field>
+              <mat-form-field class="full"><mat-label>Description</mat-label><textarea matInput rows="2" [(ngModel)]="productDraft.description"></textarea></mat-form-field>
+              <div class="row"><mat-checkbox [(ngModel)]="productDraft.isActive">Active</mat-checkbox><span class="spacer"></span><button mat-flat-button (click)="saveProduct()">Save</button></div>
+            }
+            <h3>Releases</h3>
+            <table class="data">
+              <thead><tr><th>Release</th><th>Date</th><th>Released</th><th>Notes</th></tr></thead>
+              <tbody>
+                @for (r of releases(); track r.id) {
+                  <tr><td class="mono">{{ r.versionLabel }}</td><td>{{ r.releaseDate }}</td>
+                    <td><mat-checkbox [checked]="r.isReleased" [disabled]="!auth.can('products.manage')" (change)="toggleReleased(r)" /></td><td>{{ r.notes }}</td></tr>
+                } @empty { <tr><td colspan="4" class="empty">No releases recorded.</td></tr> }
+              </tbody>
+            </table>
+            @if (auth.can('products.manage')) {
+              <div class="row">
+                <input class="cell" placeholder="Label, e.g. 2026.3" [(ngModel)]="newRelease.versionLabel" />
+                <input class="cell" type="date" [(ngModel)]="newRelease.releaseDate" />
+                <mat-checkbox [(ngModel)]="newRelease.isReleased">Released</mat-checkbox>
+                <button mat-stroked-button [disabled]="!newRelease.versionLabel" (click)="createRelease()">Add release</button>
+              </div>
+              <p class="muted small">"Since last release" filters use the latest release marked as released with a date.</p>
+            }
+          </div>
+        }
+      </div>
+    </mat-tab>
+
+    @if (auth.can('users.manage')) {
+      <mat-tab label="Users">
+        <div class="tab-body split">
+          <table class="data">
+            <thead><tr><th>User</th><th>Roles</th><th>Products</th><th>Last sign-in</th><th>Status</th></tr></thead>
+            <tbody>
+              @for (u of users(); track u.id) {
+                <tr class="clickable" [class.selected]="editingUser()?.id === u.id" (click)="editUser(u)">
+                  <td><b>{{ u.userName }}</b><div class="muted small">{{ u.displayName }}</div></td><td>{{ u.roles.join(', ') }}</td>
+                  <td>{{ u.productAccess.length ? u.productAccess.length + ' restricted' : 'All' }}</td>
+                  <td>{{ u.lastLoginAt ? (u.lastLoginAt | date: 'short') : 'Never' }}</td>
+                  <td>{{ u.isActive ? (u.isLockedOut ? 'Locked out' : 'Active') : 'Disabled' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+          <div>
+            @if (editingUser(); as u) {
+              <div class="panel">
+                <h2>{{ u.userName }}</h2>
+                <mat-form-field class="full"><mat-label>Display name</mat-label><input matInput [(ngModel)]="userDraft.displayName" /></mat-form-field>
+                <mat-form-field class="full"><mat-label>Email</mat-label><input matInput [(ngModel)]="userDraft.email" /></mat-form-field>
+                <mat-form-field class="full"><mat-label>Roles</mat-label><mat-select multiple [(ngModel)]="userDraft.roles">@for (r of roleNames(); track r) { <mat-option [value]="r">{{ r }}</mat-option> }</mat-select></mat-form-field>
+                <mat-checkbox [(ngModel)]="userDraft.isActive">Active</mat-checkbox>
+                <h3>Product access</h3>
+                <p class="muted small">Leave every product at "No restriction" to give access to all products. Once any product is set, the user sees only those.</p>
+                @for (p of products(); track p.id) {
+                  <div class="row"><span class="spacer">{{ p.name }}</span>
+                    <select class="cell" [ngModel]="accessLevel(p.id)" (ngModelChange)="setAccess(p.id, $event)">
+                      <option value="none">No restriction / no access</option><option value="view">View only</option><option value="edit">View and edit</option>
+                    </select></div>
+                }
+                <div class="row"><button mat-stroked-button (click)="resetPassword(u)"><mat-icon>key</mat-icon>Reset password</button><span class="spacer"></span>
+                  <button mat-button (click)="editingUser.set(null)">Cancel</button><button mat-flat-button (click)="saveUser()">Save</button></div>
+              </div>
+            }
+            <div class="panel">
+              <h3>New user</h3>
+              <div class="grid-2">
+                <mat-form-field><mat-label>User name</mat-label><input matInput [(ngModel)]="newUser.userName" /></mat-form-field>
+                <mat-form-field><mat-label>Display name</mat-label><input matInput [(ngModel)]="newUser.displayName" /></mat-form-field>
+                <mat-form-field><mat-label>Email</mat-label><input matInput [(ngModel)]="newUser.email" /></mat-form-field>
+                <mat-form-field><mat-label>Initial password</mat-label><input matInput type="password" autocomplete="new-password" [(ngModel)]="newUser.password" /></mat-form-field>
+              </div>
+              <mat-form-field class="full"><mat-label>Roles</mat-label><mat-select multiple [(ngModel)]="newUser.roles">@for (r of roleNames(); track r) { <mat-option [value]="r">{{ r }}</mat-option> }</mat-select></mat-form-field>
+              <button mat-flat-button [disabled]="!newUser.userName || !newUser.displayName || !newUser.password" (click)="createUser()">Create user</button>
+            </div>
+          </div>
+        </div>
+      </mat-tab>
+
+      <mat-tab label="Roles & permissions">
+        <div class="tab-body">
+          <table class="data matrix">
+            <thead><tr><th>Role</th>@for (p of permissions(); track p.code) { <th class="perm" [title]="p.description">{{ p.code }}</th> }</tr></thead>
+            <tbody>
+              @for (r of roles(); track r.id) {
+                <tr><td><b>{{ r.name }}</b> <span class="muted small">{{ r.userCount }} user(s)</span></td>
+                  @for (p of permissions(); track p.code) { <td><mat-checkbox [checked]="has(r, p.code)" (change)="togglePermission(r, p.code, $event.checked)" /></td> }</tr>
+              }
+            </tbody>
+          </table>
+          <p class="muted small">Changes apply within about 30 seconds without users signing in again.</p>
+        </div>
+      </mat-tab>
+    }
+
+    @if (auth.can('masterdata.manage')) {
+      <mat-tab label="Master data">
+        <div class="tab-body split">
+          <div class="panel">
+            <h3>Add or rename an entry</h3>
+            <mat-form-field class="full"><mat-label>List</mat-label>
+              <mat-select [(ngModel)]="master.kind"><mat-option value="test-types">Test types</mat-option><mat-option value="feature-types">Feature types</mat-option><mat-option value="feature-statuses">Feature statuses</mat-option></mat-select></mat-form-field>
+            <div class="grid-3">
+              <mat-form-field><mat-label>Code</mat-label><input matInput [(ngModel)]="master.code" placeholder="STATUTORY" /></mat-form-field>
+              <mat-form-field><mat-label>Name</mat-label><input matInput [(ngModel)]="master.name" placeholder="Statutory compliance" /></mat-form-field>
+              <mat-form-field><mat-label>Sort order</mat-label><input matInput type="number" [(ngModel)]="master.sortOrder" /></mat-form-field>
+            </div>
+            <button mat-flat-button [disabled]="!master.code || !master.name" (click)="saveMaster()">Save</button>
+            <p class="muted small">Using an existing code renames it. Codes are kept forever because records reference them.</p>
+          </div>
+          <div class="panel">
+            <h3>Test types</h3>@for (t of ui.lookups()?.testTypes; track t.code) { <span class="tag">{{ t.name }}</span> }
+            <h3>Feature types</h3>@for (t of ui.lookups()?.featureTypes; track t.code) { <span class="tag">{{ t.name }}</span> }
+            <h3>Feature statuses</h3>@for (t of ui.lookups()?.featureStatuses; track t.code) { <span class="tag">{{ t.name }}</span> }
+            <h3>Frameworks</h3>@for (t of ui.lookups()?.frameworks; track t.code) { <span class="tag">{{ t.name }}</span> }
+          </div>
+        </div>
+      </mat-tab>
+    }
+  </mat-tab-group>
+</div>
