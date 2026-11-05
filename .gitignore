@@ -14,6 +14,8 @@ src/Wings.Api/wwwroot/
 TestResults/
 .DS_Store
 src/Wings.Api/appsettings.Development.json
+src/Wings.Api/appsettings.Production.json
+publish/
 
 # Local tool configuration (machine-specific paths)
 .claude/

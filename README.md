@@ -137,10 +137,14 @@ identifiers being dropped, facts-only mode, and the exact request the Anthropic 
    script after model changes with
    `dotnet ef migrations add <Name> --project src/Wings.Infrastructure --startup-project src/Wings.Infrastructure --context SqlServerWingsDbContext -o Persistence/Migrations/SqlServer`
    (and the same for `SqliteWingsDbContext`).
-2. **Publish.** `cd web && npx ng build`, then `dotnet publish src/Wings.Api -c Release -o publish`.
-3. **IIS.** Install the ASP.NET Core 10 Hosting Bundle, create a site pointing at `publish/`, app pool *No Managed
-   Code*, enable WebSockets (for SignalR). Bind HTTPS.
-4. **Configuration** (environment variables or a secret store, never committed):
+2. **Build the package** on any machine with the .NET 10 SDK and Node.js: `./deploy/publish-iis.sh` produces
+   `publish/WingsTestOrchestrator-iis-<date>-<commit>.zip`. It refuses to package local settings or data.
+3. **Install.** Install the ASP.NET Core 10 Hosting Bundle, extract the zip on the server and run `Install-Wings.ps1` as
+   Administrator. It sets up IIS, the database, an always-running app pool (the job queue and schedulers live in that
+   process), permissions and the first administrator. See [deploy/iis/INSTALL.md](deploy/iis/INSTALL.md) for options,
+   upgrades and troubleshooting.
+4. **Configuration.** The installer writes `appsettings.Production.json`; these settings can also come from environment
+   variables or a secret store, and are never committed:
    - `ConnectionStrings__Wings` — SQL Server connection string (`Database:Provider` defaults to `SqlServer`)
    - `Auth__Jwt__SigningKey` — ≥ 32 random characters; startup fails without it
    - `Storage__RootPath` — local folder or UNC share for blobs (the app pool identity needs modify rights)

@@ -73,6 +73,7 @@ builder.Services.AddRateLimiter(o =>
 static long MaxBody(IConfiguration c) => (c.GetValue<long?>("Packages:MaxUploadBytes") ?? 100L * 1024 * 1024) + 1024 * 1024;
 builder.Services.AddOptions<FormOptions>().Configure<IConfiguration>((o, c) => o.MultipartBodyLengthLimit = MaxBody(c));
 builder.WebHost.ConfigureKestrel((ctx, k) => k.Limits.MaxRequestBodySize = MaxBody(ctx.Configuration));
+builder.Services.AddOptions<Microsoft.AspNetCore.Builder.IISServerOptions>().Configure<IConfiguration>((o, c) => o.MaxRequestBodySize = MaxBody(c));
 
 builder.Services.AddControllers().AddJsonOptions(o => o.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 builder.Services.AddProblemDetails();
